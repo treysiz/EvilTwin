@@ -228,6 +228,7 @@
             document.getElementById('evil_channel').value = channel;
             showAlert('已填入 SSID: ' + ssid + '  信道: ' + channel + '，请点击保存配置', 'success');
         }
+        var wasRunning = false;
         async function updateStatus() {
             var response = await fetch('/api/status');
             var data = await response.json();
@@ -236,11 +237,27 @@
             if (data.hostapd) {
                 light.className = 'status status-running';
                 text.innerText = '运行中';
+                wasRunning = true;
             } else {
                 light.className = 'status status-stopped';
-                text.innerText = '未运行';
+                text.innerText = '已停止';
+                // 自动恢复：如果之前是运行态且非用户手动停止
+                if (wasRunning && !stopRequested) {
+                    text.innerText = '重启中...';
+                    light.className = 'status status-stopped';
+                    setTimeout(async function() {
+                        try { await fetch('/api/start', { method: 'POST' }); } catch(e) {}
+                    }, 5000);
+                }
             }
         }
+        var stopRequested = false;
+        var origStopAttack = stopAttack;
+        stopAttack = async function() {
+            stopRequested = true;
+            await origStopAttack();
+            setTimeout(function() { stopRequested = false; }, 15000);
+        };
         setInterval(updateStatus, 5000);
         setInterval(async function() {
             var response = await fetch('/api/passwords');
