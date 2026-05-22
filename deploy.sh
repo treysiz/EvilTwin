@@ -41,7 +41,7 @@ elif [ -f "venv/Scripts/activate" ]; then
     source venv/Scripts/activate
 fi
 
-pip install --quiet flask
+venv/bin/pip install --quiet flask 2>/dev/null || pip install --quiet flask
 
 # 3. 初始化数据库
 echo "[3/4] 初始化数据库..."
