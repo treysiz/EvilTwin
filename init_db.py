@@ -52,6 +52,18 @@ def init_database():
             );
         END''')
     
+    cursor.execute('''DROP TRIGGER IF EXISTS limit_mac_logs''')
+    cursor.execute('''CREATE TRIGGER limit_mac_logs 
+        AFTER INSERT ON mac_logs
+        BEGIN
+            DELETE FROM mac_logs 
+            WHERE id NOT IN (
+                SELECT id FROM mac_logs 
+                ORDER BY captured_at DESC 
+                LIMIT 50
+            );
+        END''')
+    
     # 初始化默认配置
     cursor.execute("INSERT OR IGNORE INTO config (id, evil_ssid, evil_channel) VALUES (1, 'Free_WiFi', 6)")
     
