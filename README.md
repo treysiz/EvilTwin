@@ -1,4 +1,4 @@
-# Evil Twin 攻击管理系统 (ETA)
+# Evil Twin攻击管理系统 (ETA)
 
 > 基于 Flask + hostapd + dnsmasq 的 Evil Twin 攻击系统，支持 Web 管理后台、WiFi 密码钓鱼捕获、MAC 地址记录、多语言自适应钓鱼页面。
 
@@ -43,17 +43,16 @@ Web 管理后台 (Flask)
 ## 一键部署
 
 ```bash
+git clone https://github.com/treysiz/EvilTwin.git
+cd EvilTwin
 chmod +x deploy.sh
 sudo ./deploy.sh
-```
-
-部署脚本自动完成：安装系统依赖 → Python 虚拟环境 → Flask → 初始化数据库。
-
-完成后手动启动：
-
-```bash
 sudo venv/bin/python app.py
 ```
+
+`deploy.sh` 自动完成：系统依赖安装 → Python 虚拟环境 → Flask → 数据库初始化。
+
+浏览器打开 `http://<服务器IP>:5000`
 
 ## 手动部署
 
@@ -86,10 +85,6 @@ sudo venv/bin/python app.py
 
 > 必须用 `sudo` — hostapd / dnsmasq / ip 命令需要 root 权限。
 
-### 5. 打开管理后台
-
-浏览器访问 `http://localhost:5000` 或 `http://<服务器IP>:5000`
-
 ## 使用流程
 
 ```
@@ -111,7 +106,7 @@ sudo venv/bin/python app.py
 | GET | `/portal` | 钓鱼认证页 |
 | POST | `/capture` | 接收密码（钓鱼页提交）|
 | GET | `/api/config` | 获取配置 |
-| POST | `/api/config` | 更新配置 `{evil_ssid, evil_channel, network_interface}` |
+| POST | `/api/config` | 更新配置 |
 | GET | `/api/passwords` | 获取密码列表 |
 | DELETE | `/api/passwords` | 清空密码 |
 | GET | `/api/macs` | 获取 MAC 列表 |
@@ -136,14 +131,14 @@ SQLite 单文件 `evil_twin.db`，含三张表：
 
 ## 常见问题
 
-**Q: 启动攻击失败？**  
+**Q: 启动攻击失败？**
 A: 检查 `iw dev` 是否能看到网卡，确认支持 AP 模式：`iw list | grep "Supported interface modes" -A 10 | grep "* AP"`
 
-**Q: 扫描无结果？**  
+**Q: 扫描无结果？**
 A: Linux 用 `iw scan`，Windows WSL 自动 fallback 到 `netsh`。确保网卡已插入且驱动正常。
 
-**Q: 客户端连上但没跳转到钓鱼页？**  
+**Q: 客户端连上但没跳转到钓鱼页？**
 A: 确认 dnsmasq 运行中（`GET /api/status`），DNS 劫持配置正确。
 
-**Q: Flask 端口被占用？**  
+**Q: Flask 端口被占用？**
 A: 修改 `app.py` 末尾的 `port=5000` 为其他端口。
