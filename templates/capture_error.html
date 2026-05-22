@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="page_title">Wrong Password</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .error-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            width: 350px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .error-icon { font-size: 60px; margin-bottom: 20px; }
+        .error-card h2 { color: #333; margin-bottom: 10px; }
+        .error-card p { color: #666; font-size: 14px; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <div class="error-icon">🔒</div>
+        <h2 data-i18n="error_title">Wrong Password</h2>
+        <p data-i18n="error_msg1">WiFi password verification failed. Please check and try again.</p>
+        <p data-i18n="error_msg2">If you forgot the password, contact your network administrator.</p>
+    </div>
+
+<script>
+var I18N = {
+    "en": {
+        page_title: "Wrong Password",
+        error_title: "Wrong Password",
+        error_msg1: "WiFi password verification failed. Please check and try again.",
+        error_msg2: "If you forgot the password, contact your network administrator."
+    },
+    "zh-CN": {
+        page_title: "密码错误",
+        error_title: "密码错误",
+        error_msg1: "WiFi密码验证失败，请确认后重新连接。",
+        error_msg2: "如果您忘记了密码，请联系网络管理员。"
+    },
+    "zh-TW": {
+        page_title: "密碼錯誤",
+        error_title: "密碼錯誤",
+        error_msg1: "WiFi密碼驗證失敗，請確認後重新連線。",
+        error_msg2: "如果您忘記了密碼，請聯繫網路管理員。"
+    },
+    "ja": {
+        page_title: "パスワードエラー",
+        error_title: "パスワードエラー",
+        error_msg1: "WiFiパスワードの認証に失敗しました。確認してもう一度お試しください。",
+        error_msg2: "パスワードをお忘れの場合は、ネットワーク管理者にお問い合わせください。"
+    },
+    "ko": {
+        page_title: "비밀번호 오류",
+        error_title: "비밀번호 오류",
+        error_msg1: "WiFi 비밀번호 인증에 실패했습니다. 확인 후 다시 시도해 주세요.",
+        error_msg2: "비밀번호를 잊으신 경우 네트워크 관리자에게 문의하세요."
+    },
+    "ar": {
+        page_title: "كلمة مرور خاطئة",
+        error_title: "كلمة مرور خاطئة",
+        error_msg1: "فشل التحقق من كلمة مرور WiFi. يرجى التحقق والمحاولة مرة أخرى.",
+        error_msg2: "إذا نسيت كلمة المرور، اتصل بمسؤول الشبكة."
+    },
+    "ru": {
+        page_title: "Неверный пароль",
+        error_title: "Неверный пароль",
+        error_msg1: "Проверка пароля WiFi не удалась. Пожалуйста, проверьте и попробуйте снова.",
+        error_msg2: "Если вы забыли пароль, обратитесь к администратору сети."
+    },
+    "fr": {
+        page_title: "Mot de passe incorrect",
+        error_title: "Mot de passe incorrect",
+        error_msg1: "La vérification du mot de passe WiFi a échoué. Veuillez vérifier et réessayer.",
+        error_msg2: "Si vous avez oublié le mot de passe, contactez votre administrateur réseau."
+    },
+    "de": {
+        page_title: "Falsches Passwort",
+        error_title: "Falsches Passwort",
+        error_msg1: "WiFi-Passwortüberprüfung fehlgeschlagen. Bitte überprüfen und erneut versuchen.",
+        error_msg2: "Wenn Sie das Passwort vergessen haben, wenden Sie sich an Ihren Netzwerkadministrator."
+    },
+    "es": {
+        page_title: "Contraseña incorrecta",
+        error_title: "Contraseña incorrecta",
+        error_msg1: "La verificación de la contraseña WiFi falló. Verifique e intente de nuevo.",
+        error_msg2: "Si olvidó la contraseña, contacte al administrador de red."
+    },
+    "pt": {
+        page_title: "Senha incorreta",
+        error_title: "Senha incorreta",
+        error_msg1: "A verificação da senha WiFi falhou. Verifique e tente novamente.",
+        error_msg2: "Se esqueceu a senha, entre em contato com o administrador de rede."
+    },
+    "it": {
+        page_title: "Password errata",
+        error_title: "Password errata",
+        error_msg1: "Verifica password WiFi fallita. Controlla e riprova.",
+        error_msg2: "Se hai dimenticato la password, contatta l'amministratore di rete."
+    },
+    "th": {
+        page_title: "รหัสผ่านไม่ถูกต้อง",
+        error_title: "รหัสผ่านไม่ถูกต้อง",
+        error_msg1: "การยืนยันรหัสผ่าน WiFi ล้มเหลว โปรดตรวจสอบและลองอีกครั้ง",
+        error_msg2: "หากคุณลืมรหัสผ่าน โปรดติดต่อผู้ดูแลเครือข่าย"
+    },
+    "vi": {
+        page_title: "Sai mật khẩu",
+        error_title: "Sai mật khẩu",
+        error_msg1: "Xác minh mật khẩu WiFi thất bại. Vui lòng kiểm tra và thử lại.",
+        error_msg2: "Nếu bạn quên mật khẩu, hãy liên hệ quản trị viên mạng."
+    },
+    "hi": {
+        page_title: "गलत पासवर्ड",
+        error_title: "गलत पासवर्ड",
+        error_msg1: "WiFi पासवर्ड सत्यापन विफल। कृपया जांचें और पुनः प्रयास करें।",
+        error_msg2: "यदि आप पासवर्ड भूल गए हैं, तो नेटवर्क व्यवस्थापक से संपर्क करें।"
+    },
+    "tr": {
+        page_title: "Yanlış Şifre",
+        error_title: "Yanlış Şifre",
+        error_msg1: "WiFi şifre doğrulaması başarısız oldu. Lütfen kontrol edip tekrar deneyin.",
+        error_msg2: "Şifreyi unuttuysanız, ağ yöneticinize başvurun."
+    }
+};
+
+function detectLanguage() {
+    var lang = (navigator.language || navigator.userLanguage || "en").split("-")[0];
+    var full = navigator.language || "en";
+    if (I18N[full]) return full;
+    if (I18N[lang]) return lang;
+    if (lang === "zh") return "zh-CN";
+    return "en";
+}
+
+(function() {
+    var lang = detectLanguage();
+    var dict = I18N[lang];
+    document.documentElement.lang = lang;
+    if (lang === "ar") document.body.style.direction = "rtl";
+    document.querySelectorAll("[data-i18n]").forEach(function(el) {
+        var key = el.getAttribute("data-i18n");
+        if (dict[key]) el.textContent = dict[key];
+    });
+    if (dict.page_title) document.title = dict.page_title;
+})();
+</script>
+</body>
+</html>

