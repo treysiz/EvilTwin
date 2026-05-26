@@ -18,11 +18,11 @@ if command -v apt &>/dev/null; then
     apt update -qq
     apt install -y -qq hostapd dnsmasq aircrack-ng python3 python3-venv python3-full iw wireless-tools usbutils
 elif command -v dnf &>/dev/null; then
-    dnf install -y hostapd dnsmasq aircrack-ng python3 python3-venv iw usbutils
+    dnf install -y hostapd dnsmasq aircrack-ng python3 python3-venv iw wireless-tools usbutils
 elif command -v pacman &>/dev/null; then
-    pacman -S --noconfirm hostapd dnsmasq aircrack-ng python python-virtualenv iw usbutils
+    pacman -S --noconfirm hostapd dnsmasq aircrack-ng python python-virtualenv iw wireless_tools usbutils
 else
-    echo "[!] 不支持的包管理器，请手动安装: hostapd dnsmasq aircrack-ng python3 python3-venv iw"
+    echo "[!] 不支持的包管理器，请手动安装: hostapd dnsmasq aircrack-ng python3 python3-venv iw wireless-tools usbutils"
     exit 1
 fi
 
