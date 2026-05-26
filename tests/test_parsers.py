@@ -1,9 +1,27 @@
 import unittest
 
-from app import freq_to_channel, parse_iwlist_scan
+from app import freq_to_channel, parse_iw_scan, parse_iwlist_scan
 
 
 class IwlistParserTest(unittest.TestCase):
+    def test_parse_iw_scan_float_frequency(self):
+        output = """
+        BSS aa:bb:cc:dd:ee:ff(on wlx289401bcd8a4)
+                freq: 2412.0
+                signal: -42.00 dBm
+                SSID: Chime
+                RSN:     * Version: 1
+        """
+
+        aps = parse_iw_scan(output)
+
+        self.assertEqual(len(aps), 1)
+        self.assertEqual(aps[0]["ssid"], "Chime")
+        self.assertEqual(aps[0]["frequency"], 2412)
+        self.assertEqual(aps[0]["channel"], 1)
+        self.assertEqual(aps[0]["signal"], -42.0)
+        self.assertEqual(aps[0]["security"], "WPA")
+
     def test_parse_wpa2_network(self):
         output = """
           Cell 01 - Address: AA:BB:CC:DD:EE:FF

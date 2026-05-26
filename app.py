@@ -416,9 +416,12 @@ def parse_iw_scan(stdout):
             ssid = stripped[5:].strip()
             current['ssid'] = ssid if ssid else '<隐藏>'
         elif stripped.startswith('freq:'):
-            freq = int(stripped.split()[1])
-            current['frequency'] = freq
-            current['channel'] = freq_to_channel(freq)
+            try:
+                freq = int(float(stripped.split()[1]))
+                current['frequency'] = freq
+                current['channel'] = freq_to_channel(freq)
+            except (IndexError, ValueError):
+                app.logger.warning('Unable to parse iw frequency line: %s', stripped)
         elif stripped.startswith('signal:'):
             try:
                 current['signal'] = float(stripped.split()[1])
