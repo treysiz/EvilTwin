@@ -16,7 +16,7 @@ fi
 echo "[1/4] 安装系统依赖..."
 if command -v apt &>/dev/null; then
     apt update -qq
-    apt install -y -qq hostapd dnsmasq aircrack-ng python3 python3-venv python3-full iw usbutils
+    apt install -y -qq hostapd dnsmasq aircrack-ng python3 python3-venv python3-full iw wireless-tools usbutils
 elif command -v dnf &>/dev/null; then
     dnf install -y hostapd dnsmasq aircrack-ng python3 python3-venv iw usbutils
 elif command -v pacman &>/dev/null; then
@@ -41,7 +41,7 @@ elif [ -f "venv/Scripts/activate" ]; then
     source venv/Scripts/activate
 fi
 
-venv/bin/pip install --quiet flask waitress 2>/dev/null || pip install --quiet flask waitress
+venv/bin/pip install --quiet -r requirements.txt 2>/dev/null || pip install --quiet -r requirements.txt
 
 # 3. 初始化数据库
 echo "[3/4] 初始化数据库..."
