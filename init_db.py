@@ -10,13 +10,13 @@ def init_database():
         id INTEGER PRIMARY KEY CHECK (id = 1),
         evil_ssid TEXT NOT NULL DEFAULT 'Free_WiFi',
         evil_channel INTEGER DEFAULT 6,
-        network_interface TEXT NOT NULL DEFAULT 'wlan0',
+        network_interface TEXT NOT NULL DEFAULT '',
         evil_passphrase TEXT NOT NULL DEFAULT '12345678',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
     for col, default in [
-        ('network_interface', "'wlan0'"),
+        ('network_interface', "''"),
         ('evil_passphrase', "'12345678'"),
     ]:
         try:

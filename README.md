@@ -60,7 +60,7 @@ sudo venv/bin/python app.py
 
 ```bash
 sudo apt update
-sudo apt install -y hostapd dnsmasq aircrack-ng python3 python3-venv python3-full iw
+sudo apt install -y hostapd dnsmasq aircrack-ng python3 python3-venv python3-full iw wireless-tools
 ```
 
 ### 2. 创建虚拟环境
@@ -84,6 +84,36 @@ sudo venv/bin/python app.py
 ```
 
 > 必须用 `sudo` — hostapd / dnsmasq / ip 命令需要 root 权限。
+
+### 权限修复
+
+如果曾经使用 `sudo venv/bin/python app.py` 启动过程序，`evil_twin.db` 或 `evil_twin.log` 可能会变成 root 所有，之后普通用户启动会出现 `PermissionError`。在 `/home/jun/EvilTwin` 中执行：
+
+```bash
+sudo chown -R jun:jun /home/jun/EvilTwin
+```
+
+程序启动时会检查 `evil_twin.db` 和 `evil_twin.log` 是否可写；如果不可写，会提示：
+
+```bash
+请执行 sudo chown -R $USER:$USER /home/jun/EvilTwin
+```
+
+### 无线网卡选择
+
+后台首页会通过 `iw dev` 自动发现无线网卡，并显示每个接口是否已连接 SSID、是否有 IP、是否是默认路由网卡。建议选择非默认路由的 USB 网卡用于扫描和实验，例如 `wlx...`；不要选择正在负责 SSH/联网的内置网卡，例如 `wlo2`。
+
+扫描会优先使用：
+
+```bash
+sudo iw dev <iface> scan
+```
+
+如果失败或无结果，会自动 fallback 到：
+
+```bash
+sudo iwlist <iface> scanning
+```
 
 ## 使用流程
 
