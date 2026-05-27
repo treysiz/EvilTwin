@@ -66,6 +66,13 @@ def ensure_config_target_bssid_column(conn):
         conn.execute("ALTER TABLE config ADD COLUMN target_bssid TEXT DEFAULT ''")
         conn.commit()
 
+def normalize_channel(value, default=6):
+    try:
+        channel = int(value)
+    except (TypeError, ValueError):
+        return default
+    return channel if 1 <= channel <= 11 else default
+
 def get_default_route_ifaces():
     r = run_cmd(['ip', 'route', 'show', 'default'], timeout=5)
     ifaces = set()
@@ -268,7 +275,7 @@ def manage_config():
         old_config = conn.execute('SELECT network_interface FROM config WHERE id = 1').fetchone()
         old_iface = old_config['network_interface'] if old_config else ''
         evil_ssid = data.get('evil_ssid', 'Free_WiFi')
-        evil_channel = data.get('evil_channel', 6)
+        evil_channel = normalize_channel(data.get('evil_channel', 6))
         network_interface = data.get('network_interface', '')
         evil_passphrase = data.get('evil_passphrase', '12345678')
         target_bssid = data.get('target_bssid', '')
@@ -687,7 +694,7 @@ def start_evil_twin():
     conn.close()
     
     evil_ssid = config['evil_ssid']
-    evil_channel = config['evil_channel']
+    evil_channel = normalize_channel(config['evil_channel'])
     iface = config['network_interface']
     passphrase = config['evil_passphrase'] if config['evil_passphrase'] else ''
     open_mode = not passphrase or passphrase.upper() == 'OPEN'

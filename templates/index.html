@@ -185,6 +185,11 @@
             setTimeout(function(){ alert.style.display = 'none'; }, 5000);
         }
 
+        function normalizeChannel(value) {
+            var channel = parseInt(value, 10);
+            return channel >= 1 && channel <= 11 ? channel : 6;
+        }
+
         async function refreshInterfaces() {
             var list = document.getElementById('network_interface');
             var container = document.getElementById('iface_list_container');
@@ -335,7 +340,7 @@
 
             try {
                 var evil_ssid = document.getElementById('evil_ssid').value;
-                var evil_channel = parseInt(document.getElementById('evil_channel').value);
+                var evil_channel = normalizeChannel(document.getElementById('evil_channel').value);
                 var evil_passphrase = document.getElementById('evil_passphrase').value.trim() || '12345678';
 
                 var r = await fetch('/api/config', {
@@ -360,7 +365,7 @@
 
         async function saveConfig() {
             var evil_ssid = document.getElementById('evil_ssid').value;
-            var evil_channel = parseInt(document.getElementById('evil_channel').value);
+            var evil_channel = normalizeChannel(document.getElementById('evil_channel').value);
             var network_interface = document.getElementById('network_interface').value.trim();
             var evil_passphrase = document.getElementById('evil_passphrase').value.trim() || '12345678';
 
@@ -461,7 +466,7 @@
         function applyConfig(configData) {
             if (!configData) return;
             document.getElementById('evil_ssid').value = configData.evil_ssid || 'Free_WiFi';
-            document.getElementById('evil_channel').value = configData.evil_channel || 6;
+            document.getElementById('evil_channel').value = normalizeChannel(configData.evil_channel);
             document.getElementById('evil_passphrase').value = configData.evil_passphrase || '12345678';
             _cloneBssid = configData.target_bssid || '';
         }
@@ -473,7 +478,7 @@
         function cloneAp(ssid, channel, bssid) {
             _cloneBssid = bssid || '';
             document.getElementById('evil_ssid').value = ssid;
-            document.getElementById('evil_channel').value = channel;
+            document.getElementById('evil_channel').value = normalizeChannel(channel);
             showAlert('已填入 SSID: ' + ssid + '  信道: ' + channel + '  BSSID: ' + (_cloneBssid || '未设置'), 'success');
         }
 
