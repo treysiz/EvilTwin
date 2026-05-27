@@ -498,24 +498,10 @@
             } else {
                 light.className = 'status status-stopped';
                 text.innerText = '已停止';
-                if (wasRunning && !stopRequested) {
-                    text.innerText = '重启中...';
-                    setTimeout(async function() {
-                        try { await fetch('/api/start', { method: 'POST' }); } catch(e) {}
-                    }, 5000);
-                }
                 detail.style.display = 'none';
                 document.getElementById('client_count').innerText = '0';
             }
         }
-
-        var stopRequested = false;
-        var origStopAttack = stopAttack;
-        stopAttack = async function() {
-            stopRequested = true;
-            await origStopAttack();
-            setTimeout(function() { stopRequested = false; }, 15000);
-        };
 
         setInterval(updateStatus, 5000);
         setInterval(async function() {
