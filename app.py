@@ -614,14 +614,22 @@ def start_evil_twin():
     evil_ssid = config['evil_ssid']
     evil_channel = config['evil_channel']
     iface = config['network_interface']
-    passphrase = config['evil_passphrase'] if config['evil_passphrase'] else '12345678'
+    passphrase = config['evil_passphrase'] if config['evil_passphrase'] else ''
+    open_mode = not passphrase or passphrase.upper() == 'OPEN'
     
     if not iface:
         return {'status': 'error', 'message': '未检测到可用无线网卡'}
     
     # 2. 配置hostapd
-    hostapd_conf = f"""
-interface={iface}
+    if open_mode:
+        hostapd_conf = f"""interface={iface}
+driver=nl80211
+ssid={evil_ssid}
+hw_mode=g
+channel={evil_channel}
+"""
+    else:
+        hostapd_conf = f"""interface={iface}
 driver=nl80211
 ssid={evil_ssid}
 hw_mode=g
