@@ -698,11 +698,14 @@ rsn_pairwise=CCMP
     # 3. 配置dnsmasq (DNS劫持)
     dnsmasq_conf = f"""
 interface={iface}
+bind-interfaces
+no-resolv
 dhcp-range=192.168.4.2,192.168.4.100,255.255.255.0,12h
 dhcp-option=3,192.168.4.1
 dhcp-option=6,192.168.4.1
 server=8.8.8.8
 address=/#/192.168.4.1
+dhcp-authoritative
 """
     with open('/tmp/dnsmasq.conf', 'w') as f:
         f.write(dnsmasq_conf)
