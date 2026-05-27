@@ -224,6 +224,7 @@
                 // 获取已保存网卡
                 var configResp = await fetch('/api/config');
                 var configData = await configResp.json();
+                applyConfig(configData);
                 var savedIface = configData.network_interface || '';
 
                 if (savedIface && interfacesData.find(function(i){ return i.name === savedIface; })) {
@@ -456,7 +457,19 @@
             }
         }
 
-        var _cloneBssid = '';
+        var _cloneBssid = {{ (config.target_bssid or '')|tojson }};
+        function applyConfig(configData) {
+            if (!configData) return;
+            document.getElementById('evil_ssid').value = configData.evil_ssid || 'Free_WiFi';
+            document.getElementById('evil_channel').value = configData.evil_channel || 6;
+            document.getElementById('evil_passphrase').value = configData.evil_passphrase || '12345678';
+            _cloneBssid = configData.target_bssid || '';
+        }
+
+        function clearCloneTarget() {
+            _cloneBssid = '';
+        }
+
         function cloneAp(ssid, channel, bssid) {
             _cloneBssid = bssid || '';
             document.getElementById('evil_ssid').value = ssid;
@@ -514,6 +527,8 @@
         }, 3000);
 
         refreshInterfaces();
+        document.getElementById('evil_ssid').addEventListener('input', clearCloneTarget);
+        document.getElementById('evil_channel').addEventListener('change', clearCloneTarget);
         updateStatus();
     </script>
 </body>
