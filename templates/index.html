@@ -342,7 +342,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         evil_ssid: evil_ssid, evil_channel: evil_channel,
-                        network_interface: iface, evil_passphrase: evil_passphrase
+                        network_interface: iface, evil_passphrase: evil_passphrase, target_bssid: _cloneBssid
                     })
                 });
                 var data = await r.json();
@@ -373,7 +373,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     evil_ssid: evil_ssid, evil_channel: evil_channel,
-                    network_interface: network_interface, evil_passphrase: evil_passphrase
+                    network_interface: network_interface, evil_passphrase: evil_passphrase, target_bssid: _cloneBssid
                 })
             });
             var data = await response.json();
@@ -443,7 +443,7 @@
                         cloneBtn.textContent = '🎯 克隆';
                         cloneBtn.style.padding = '5px 10px';
                         cloneBtn.style.fontSize = '12px';
-                        cloneBtn.onclick = function() { cloneAp(ap.ssid, ap.channel); };
+                        cloneBtn.onclick = function() { cloneAp(ap.ssid, ap.channel, ap.bssid); };
                         actionCell.appendChild(cloneBtn);
                     });
                 } else {
@@ -456,10 +456,12 @@
             }
         }
 
-        function cloneAp(ssid, channel) {
+        var _cloneBssid = '';
+        function cloneAp(ssid, channel, bssid) {
+            _cloneBssid = bssid || '';
             document.getElementById('evil_ssid').value = ssid;
             document.getElementById('evil_channel').value = channel;
-            showAlert('已填入 SSID: ' + ssid + '  信道: ' + channel + '，请点击保存配置', 'success');
+            showAlert('已填入 SSID: ' + ssid + '  信道: ' + channel + '  BSSID: ' + (_cloneBssid || '未设置'), 'success');
         }
 
         var wasRunning = false;
