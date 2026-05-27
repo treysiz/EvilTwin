@@ -696,15 +696,11 @@ rsn_pairwise=CCMP
         f.write(hostapd_conf)
     
     # 3. 配置dnsmasq (DNS劫持)
-    dnsmasq_conf = f"""
-interface={iface}
-bind-dynamic
-listen-address=192.168.4.1
-no-resolv
-dhcp-range=192.168.4.2,192.168.4.100,255.255.255.0,12h
+    dnsmasq_conf = f"""interface={iface}
+bind-interfaces
+dhcp-range=192.168.4.2,192.168.4.100,12h
 dhcp-option=3,192.168.4.1
 dhcp-option=6,192.168.4.1
-server=8.8.8.8
 address=/#/192.168.4.1
 dhcp-authoritative
 """
