@@ -823,14 +823,29 @@ def stop_evil_twin(iface_override=None):
     conn.close()
     iface = iface_override or (config['network_interface'] if config else '')
     
-    run_cmd(['sudo', 'pkill', 'hostapd'])
-    run_cmd(['sudo', 'pkill', 'dnsmasq'])
-    run_cmd(['sudo', 'pkill', 'aireplay-ng'])
-    run_cmd(['sudo', 'systemctl', 'start', 'systemd-resolved'])
+    errors = []
+    for proc in ('hostapd', 'dnsmasq', 'aireplay-ng'):
+        result = run_cmd(['sudo', 'pkill', '-9', proc])
+        if result.returncode not in (0, 1):
+            errors.append(f'{proc}: {result.stderr.strip() or result.stdout.strip()}')
+
+    resolved = run_cmd(['sudo', 'systemctl', 'start', 'systemd-resolved'])
+    if resolved.returncode != 0:
+        errors.append(f'systemd-resolved: {resolved.stderr.strip() or resolved.stdout.strip()}')
     if iface:
-        run_cmd(['sudo', 'ip', 'addr', 'del', '192.168.4.1/24', 'dev', iface])
-        run_cmd(['sudo', 'iptables', '-t', 'nat', '-D', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '80', '-j', 'REDIRECT', '--to-port', '5000'])
-        run_cmd(['sudo', 'iptables', '-t', 'nat', '-D', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', '443', '-j', 'REDIRECT', '--to-port', '5000'])
+        addr = run_cmd(['sudo', 'ip', 'addr', 'del', '192.168.4.1/24', 'dev', iface])
+        if addr.returncode not in (0, 2):
+            errors.append(f'ip addr del: {addr.stderr.strip() or addr.stdout.strip()}')
+        for port in ('80', '443'):
+            while True:
+                rule = run_cmd(['sudo', 'iptables', '-t', 'nat', '-D', 'PREROUTING', '-i', iface, '-p', 'tcp', '--dport', port, '-j', 'REDIRECT', '--to-port', '5000'])
+                if rule.returncode != 0:
+                    break
+    still_running = [proc for proc in ('hostapd', 'dnsmasq', 'aireplay-ng') if is_process_running(proc)]
+    if still_running:
+        return {'status': 'error', 'message': '停止不完全: ' + ', '.join(still_running), 'errors': errors}
+    if errors:
+        return {'status': 'warning', 'message': '攻击已停止，但清理有警告', 'errors': errors}
     return {'status': 'success', 'message': '攻击已停止'}
 
 def restart_hotspot(old_iface=None):

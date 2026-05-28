@@ -409,10 +409,16 @@
         }
 
         async function stopAttack() {
-            var response = await fetch('/api/stop', { method: 'POST' });
-            var data = await response.json();
-            showAlert(data.message, 'success');
-            updateStatus();
+            try {
+                var response = await fetch('/api/stop', { method: 'POST' });
+                var data = await response.json();
+                var type = data.status === 'success' ? 'success' : 'error';
+                var detail = data.errors && data.errors.length ? ' | ' + data.errors.join('; ') : '';
+                showAlert((data.message || '停止请求已发送') + detail, type);
+                updateStatus();
+            } catch(e) {
+                showAlert('停止失败: ' + e, 'error');
+            }
         }
 
         async function scanWiFi() {
